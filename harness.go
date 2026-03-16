@@ -1,7 +1,5 @@
-// harness.go — FIXED EVALUATION INFRASTRUCTURE (read-only by convention)
-//
-// This file provides the model loading, generation, and timing functions
-// used by bench_test.go. The autonomous agent should not modify this file.
+// harness.go provides model loading, generation, and timing functions
+// used by bench_test.go and bench_ane_test.go.
 
 package mlxgoane
 

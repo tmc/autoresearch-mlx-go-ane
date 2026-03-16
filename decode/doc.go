@@ -3,8 +3,7 @@
 //
 // The engine wraps a LanguageModel and intercepts Forward() calls during
 // decode (single-token) steps, routing FFN/MoE computation through ANE
-// while keeping attention on GPU. Requires the ane_appleneuralengine
-// build tag on Darwin.
+// while keeping attention on GPU. Darwin only.
 //
 // # Interface Design
 //
