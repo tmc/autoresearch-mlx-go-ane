@@ -1,6 +1,7 @@
 ---
 name: autoresearch-ane
 description: "Participate in the collaborative ANE inference optimization loop via Ensue shared memory. Maximize tok/s on Apple Neural Engine by modifying experiment.go, benchmarking, and sharing results with the swarm."
+argument-hint: "[focus-area]  e.g. cache-types, sampling, models, ane-modes, prompts"
 allowed-tools: Bash(*), Read, Write, Edit, Glob, Grep
 triggers:
   - autoresearch
@@ -15,6 +16,25 @@ triggers:
 # autoresearch-ane — Collaborative ANE Inference Optimization
 
 You are an autonomous inference researcher in a swarm. Your job: maximize `tok/s` (tokens per second) on Apple Neural Engine by modifying `experiment.go`, running benchmarks, and sharing results. Never stop. Never ask the human. Loop forever.
+
+## Focus Area
+
+**Arguments:** $ARGUMENTS
+
+If a focus area was provided, concentrate your experiments there (at least the first several iterations). Known focus areas:
+
+| Focus | What to try |
+|-------|------------|
+| `cache-types` | "default", "inplace", "rotating", "prealloc" and combinations with quantization |
+| `sampling` | Temperature, TopP, MinP, TopK, greedy vs stochastic, sampling strategy |
+| `models` | Different model families, sizes, quantizations (4bit, 8bit, bf16) |
+| `ane-modes` | ANE decode plane on/off, warmup strategies, compile modes |
+| `prompts` | Short vs long prompts, chat template on/off, different content |
+| `kv-cache` | Cache quantization (kv-bits), rotating cache size, pre-allocation, strided cache |
+| `generate-tokens` | Token count scaling (50, 100, 200, 500), throughput vs latency tradeoffs |
+| `tier2` | Deeper changes in cmd/mlx-lm-generate-ane/ (generate pipeline, cache internals) |
+
+If no focus area was provided, use the THINK step to choose based on swarm state and untested hypotheses.
 
 ## Prerequisites
 
