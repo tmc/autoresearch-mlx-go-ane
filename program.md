@@ -235,3 +235,7 @@ Deeper experiments (Tier 2 — more impactful, more risk):
 4. **Cache quantization**: Set kv-bits for quantized cache
 5. **Rotating cache size**: Tune max-kv-size for rotating cache
 6. **Compile mode**: Experiment with compile mode when ANE is off
+
+## Collaborative mode
+
+When running in collab mode, multiple agents on different Macs share results through the Ensue memory network. See `.skills/autoresearch/SKILL.md` for the full protocol (THINK/CLAIM/HACK/RUN/PUBLISH loop, Ensue tool usage, key schemas, safety rules). See `collab.md` for a quick reference.
