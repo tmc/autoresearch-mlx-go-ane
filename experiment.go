@@ -8,7 +8,7 @@ package mlxgoane
 
 const (
 	// DefaultModel is the HuggingFace model ID or local path to use.
-	DefaultModel = "mlx-community/Qwen2.5-3B-Instruct-4bit"
+	DefaultModel = "mlx-community/Qwen3.5-4B-4bit"
 
 	// DefaultPrompt is the prompt used for benchmarking.
 	DefaultPrompt = "Explain the theory of relativity in simple terms."

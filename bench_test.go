@@ -51,7 +51,8 @@ func TestMain(m *testing.M) {
 }
 
 // BenchmarkGenerate measures end-to-end generation (prefill + decode).
-// Reports: tok/s, prefill_ms, gen_ms, peak_mem_gb.
+// The Go benchmark timer captures wall time per iteration (ns/op).
+// Custom metrics report the last iteration's detailed breakdown.
 func BenchmarkGenerate(b *testing.B) {
 	var lastRes GenerateResult
 	for b.Loop() {
@@ -61,47 +62,33 @@ func BenchmarkGenerate(b *testing.B) {
 		}
 		lastRes = res
 	}
-	b.StopTimer()
 
 	b.ReportMetric(lastRes.TokPerSec(), "tok/s")
-	b.ReportMetric(float64(lastRes.PrefillDuration.Milliseconds()), "prefill_ms")
-	b.ReportMetric(float64(lastRes.GenerateDuration.Milliseconds()), "gen_ms")
+	b.ReportMetric(lastRes.DecodeTokPerSec(), "decode_tok/s")
+	b.ReportMetric(float64(lastRes.PrefillDuration.Microseconds())/1000, "prefill_ms")
+	b.ReportMetric(float64(lastRes.GenerateDuration.Microseconds())/1000, "gen_ms")
 
-	peakMemGB := 0.0
+	var peakMemGB float64
 	if peakBytes, err := mlx.GetPeakMemory(); err == nil {
-		peakMemGB = float64(peakBytes) / (1024 * 1024 * 1024)
+		peakMemGB = float64(peakBytes) / (1 << 30)
 	} else {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
-		peakMemGB = float64(m.Sys) / (1024 * 1024 * 1024)
+		peakMemGB = float64(m.Sys) / (1 << 30)
 	}
 	b.ReportMetric(peakMemGB, "peak_mem_gb")
 }
 
-// BenchmarkPrefill measures prefill-only throughput (prompt encoding + first token).
-// Reports: prompt_tok/s.
+// BenchmarkPrefill measures prefill-only throughput (prompt processing + first token).
 func BenchmarkPrefill(b *testing.B) {
+	var lastRes GenerateResult
 	for b.Loop() {
 		res, err := testEngine.generateN(testPromptTokens, 1)
 		if err != nil {
 			b.Fatal(err)
 		}
-		b.ReportMetric(res.PrefillTokPerSec(), "prompt_tok/s")
-	}
-}
-
-// BenchmarkDecode measures decode-only throughput (per-token generation after prefill).
-// Reports: decode_tok/s.
-func BenchmarkDecode(b *testing.B) {
-	var lastRes GenerateResult
-	for b.Loop() {
-		res, err := testEngine.generateN(testPromptTokens, GenerateTokens)
-		if err != nil {
-			b.Fatal(err)
-		}
 		lastRes = res
 	}
-	b.StopTimer()
 
-	b.ReportMetric(lastRes.DecodeTokPerSec(), "decode_tok/s")
+	b.ReportMetric(lastRes.PrefillTokPerSec(), "prompt_tok/s")
 }

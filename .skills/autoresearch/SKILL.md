@@ -202,7 +202,7 @@ git add -A && git commit -m "<param> <old> → <new>"
 ### 5. RUN
 
 ```bash
-./bench-note run --benchtime=5x --count=6
+./bench-note run --benchtime=1x --count=6
 ```
 
 This runs benchmarks, attaches results as a git note to HEAD, and auto-compares against the nearest ancestor with a bench note.
@@ -211,9 +211,9 @@ This runs benchmarks, attaches results as a git note to HEAD, and auto-compares 
 
 Key metrics from bench-note output:
 - `BenchmarkGenerate` `tok/s` — **primary optimization target**
+- `BenchmarkGenerate` `decode_tok/s` — decode-only throughput (excluding prefill)
 - `BenchmarkGenerate` `prefill_ms` — prompt processing time
 - `BenchmarkGenerate` `peak_mem_gb` — peak memory
-- `BenchmarkDecode` `decode_tok/s` — decode-only throughput
 
 Append to `results.tsv` (tab-separated, never commit):
 

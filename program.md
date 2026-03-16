@@ -66,14 +66,14 @@ go build -o bench-note ./cmd/bench-note/
 
 **Run benchmarks and attach to HEAD**:
 ```bash
-./bench-note run --benchtime=5x --count=6
+./bench-note run --benchtime=1x --count=6
 ```
 
 This runs `go test -bench`, attaches the output as a git note to HEAD, and automatically runs benchstat against the nearest ancestor that has a bench note.
 
 **Attach existing output** (e.g. from a `tee` file):
 ```bash
-./bench-note run --from-file=bench_after.txt --benchtime=5x --count=6
+./bench-note run --from-file=bench_after.txt --benchtime=1x --count=6
 ```
 
 **View results**:
@@ -97,15 +97,15 @@ This runs `go test -bench`, attaches the output as a git note to HEAD, and autom
 ### Key metrics
 
 - `BenchmarkGenerate` `tok/s` — **this is the primary metric you are optimizing** (tokens per second, higher is better)
+- `BenchmarkGenerate` `decode_tok/s` — decode-only throughput (excluding prefill)
 - `BenchmarkGenerate` `prefill_ms` — time to process the prompt and produce first token
 - `BenchmarkGenerate` `gen_ms` — total generation wall time
 - `BenchmarkGenerate` `peak_mem_gb` — peak GPU/Metal memory usage
 - `BenchmarkPrefill` `prompt_tok/s` — prefill throughput
-- `BenchmarkDecode` `decode_tok/s` — decode-only throughput (excluding prefill)
 
 A change is worth keeping if `tok/s` increased with `p < 0.05`. If benchstat shows `~` (no significant difference), the change has no effect — discard it.
 
-The `-count 6` flag runs each benchmark 6 times for meaningful statistics. Use `-benchtime 3x` for faster exploration, `-benchtime 10x` for precise final measurements.
+The `-count 6` flag runs each benchmark 6 independent times for benchstat's Welch t-test. With `-benchtime=1x`, each sample is a single generation — fast (~3s total) and statistically independent. Use `-count 10` for higher confidence on close calls.
 
 ## Logging results
 
@@ -147,7 +147,7 @@ LOOP FOREVER:
 1. Edit files with an experimental idea (see editable files above).
 2. Verify it compiles: `go test -c -o /dev/null .`
 3. git commit: `git add -A && git commit -m "<description>"`
-4. Run benchmarks and attach as git note: `./bench-note run --benchtime=5x --count=6`
+4. Run benchmarks and attach as git note: `./bench-note run --benchtime=1x --count=6`
    - This runs benchmarks, attaches results to HEAD, and auto-compares against the nearest ancestor with a bench note.
 5. Review the benchstat delta: `./bench-note show`
 6. If `tok/s` improved (increased) with statistical significance:
