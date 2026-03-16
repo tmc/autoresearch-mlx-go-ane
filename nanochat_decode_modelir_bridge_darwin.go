@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tmc/mlx-go/internal/modelir"
+	"github.com/tmc/mlx-go/modelir"
 	"github.com/tmc/mlx-go/exp/modelir/target/coremltools"
 )
 

@@ -11,7 +11,7 @@ import (
 
 	"github.com/tmc/apple/private/appleneuralengine"
 	"github.com/tmc/apple/x/coremlcompiler"
-	"github.com/tmc/mlx-go/internal/modelir"
+	"github.com/tmc/mlx-go/modelir"
 	anereify "github.com/tmc/mlx-go/modelir/target/mil/ane"
 )
 

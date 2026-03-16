@@ -40,6 +40,5 @@ type SurfaceSyncRuntime interface {
 
 var (
 	_ SurfaceSyncRuntime = (*ANEDraftModel)(nil)
-	_ SurfaceSyncRuntime = (*NanochatDecodeRuntime)(nil)
 	_ SurfaceSyncRuntime = (*SurfaceDecodeFFN)(nil)
 )

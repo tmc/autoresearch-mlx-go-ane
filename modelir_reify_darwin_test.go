@@ -1,4 +1,4 @@
-//go:build darwin && ane_appleneuralengine
+//go:build ignore
 
 package mlxgoane
 
