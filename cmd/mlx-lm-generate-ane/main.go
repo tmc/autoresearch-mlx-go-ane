@@ -25,6 +25,8 @@ import (
 	"github.com/tmc/mlx-go/mlxc"
 
 	"github.com/tmc/mlx-go-lm/mlxlm/decode"
+
+	_ "github.com/tmc/mlx-go-ane/register"
 )
 
 func main() {
