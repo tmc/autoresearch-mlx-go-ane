@@ -32,6 +32,25 @@ type ReifiedMIL = anereify.ReifiedMIL
 // ReifyOptions controls ModelIR -> ANE MIL reification.
 type ReifyOptions = anereify.ReifyOptions
 
+// ReifyOption configures ReifyFunction behavior.
+type ReifyOption = anereify.ReifyOption
+
+// WithEmitOptions sets MIL emission options (weight format, version, target).
+var WithEmitOptions = anereify.WithEmitOptions
+
+// WithoutSafeNorm skips the ANE-specific safe RMSNorm rewrite.
+var WithoutSafeNorm = anereify.WithoutSafeNorm
+
+// WithoutConvRewrite skips the matmul-to-conv1x1 rewrite.
+var WithoutConvRewrite = anereify.WithoutConvRewrite
+
+// ReifyFunction compiles an arbitrary modelir.Function to ANE MIL via the
+// graph-walking transform pipeline. The result is a ReifiedMIL that feeds
+// into CompileFromReified or CompileAndLoadReifiedMIL.
+func ReifyFunction(fn *modelir.Function, weights map[string]*modelir.Weight, opts ...ReifyOption) (ReifiedMIL, error) {
+	return anereify.ReifyFunction(fn, weights, opts...)
+}
+
 // DetectWrapperPattern returns the recognized wrapper shape of prog entry.
 func DetectWrapperPattern(prog *modelir.Program) (WrapperPattern, error) {
 	return anereify.DetectWrapperPattern(prog)
