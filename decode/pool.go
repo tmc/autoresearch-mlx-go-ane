@@ -342,11 +342,11 @@ func (s *stage) beginPreparedInputTimed(packed *mlx.Array, materialized bool, si
 		return nil, dispatchTiming{}, fmt.Errorf("%s: bridge does not implement bridgeTransfer", s.name)
 	}
 	wait := sync.WaitEvent()
-	if wait == nil {
-		return nil, dispatchTiming{}, fmt.Errorf("%s: wait event is unavailable", s.name)
-	}
-	if err := wait.SetSignaledValue(0); err != nil {
-		return nil, dispatchTiming{}, fmt.Errorf("%s: reset wait event: %w", s.name, err)
+	hasEvents := wait != nil
+	if hasEvents {
+		if err := wait.SetSignaledValue(0); err != nil {
+			return nil, dispatchTiming{}, fmt.Errorf("%s: reset wait event: %w", s.name, err)
+		}
 	}
 	var timing dispatchTiming
 	reason := "other"
@@ -357,7 +357,7 @@ func (s *stage) beginPreparedInputTimed(packed *mlx.Array, materialized bool, si
 	aliasStart := time.Now()
 	dst, aliasErr := slot.inputAlias(inputShape)
 	timing.Alias = time.Since(aliasStart)
-	if aliasErr == nil {
+	if aliasErr == nil && hasEvents {
 		if !materialized {
 			reason = "eval"
 		}
@@ -399,7 +399,7 @@ func (s *stage) beginPreparedInputTimed(packed *mlx.Array, materialized bool, si
 				synchronized: true,
 			}, timing, nil
 		}
-	} else {
+	} else if aliasErr != nil {
 		reason = "alias"
 	}
 	s.hostFallbackOnce.Do(func() {
@@ -417,8 +417,10 @@ func (s *stage) beginPreparedInputTimed(packed *mlx.Array, materialized bool, si
 	if err := eval.InputSurface().Write(host); err != nil {
 		return nil, timing, fmt.Errorf("%s: write input IOSurface: %w", s.name, err)
 	}
-	if err := wait.SetSignaledValue(sync.WaitValue()); err != nil {
-		return nil, timing, fmt.Errorf("%s: signal wait event after input write: %w", s.name, err)
+	if hasEvents {
+		if err := wait.SetSignaledValue(sync.WaitValue()); err != nil {
+			return nil, timing, fmt.Errorf("%s: signal wait event after input write: %w", s.name, err)
+		}
 	}
 	ok = true
 	timing.Prepare = time.Since(overallStart)

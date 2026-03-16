@@ -639,7 +639,10 @@ func releaseOutputViews(views []outputView) {
 
 // useDecodePlane checks whether a forward call should use ANE dispatch.
 func (p *Plane) useDecodePlane(embeddings *mlx.Array, cache kvcache.Cache) bool {
-	if p == nil || p.model == nil || embeddings == nil || embeddings.IsNil() || cache == nil || p.isDisabled() {
+	if p == nil || p.model == nil || embeddings == nil || embeddings.IsNil() || cache == nil {
+		return false
+	}
+	if p.isDisabled() && !p.gpuFallback {
 		return false
 	}
 	shape := embeddings.Shape()
@@ -657,9 +660,22 @@ func (p *Plane) cacheSlice(cache kvcache.Cache) []kvcache.Cache {
 	return nil
 }
 
-// runBaseFromEmbeddings delegates to the wrapped model's full forward.
+// embeddingForwarder is an optional model interface for running from
+// pre-computed embeddings instead of token IDs.
+type embeddingForwarder interface {
+	ForwardFromEmbeddings(embeddings *mlx.Array, cache kvcache.Cache) (*mlx.Array, kvcache.Cache, error)
+}
+
+// runBaseFromEmbeddings delegates to the wrapped model when the Plane
+// cannot slice the cache into per-layer caches. If the model supports
+// ForwardFromEmbeddings, embeddings are passed through directly;
+// otherwise we return an error since model.Forward expects token IDs,
+// not embedding vectors.
 func (p *Plane) runBaseFromEmbeddings(embeddings *mlx.Array, cache kvcache.Cache) (*mlx.Array, kvcache.Cache, error) {
-	return p.model.Forward(embeddings, cache)
+	if ef, ok := p.model.(embeddingForwarder); ok {
+		return ef.ForwardFromEmbeddings(embeddings, cache)
+	}
+	return nil, nil, fmt.Errorf("decode plane: cache %T does not support per-layer access (GetAllCaches) and model %T does not implement ForwardFromEmbeddings; use models.MultiLayerCache", cache, p.model)
 }
 
 // denseOutput runs a single dense FFN layer through ANE.
@@ -1284,8 +1300,8 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 		return nil, nil, nil, fmt.Errorf("attention: %w", err)
 	}
 
-	// If ANE is disabled, fall back to GPU-only path.
-	if p.isDisabled() {
+	// If ANE is disabled or gpu_fallback mode is active, fall back to GPU-only path.
+	if p.isDisabled() || p.gpuFallback {
 		h, err := mlx.Add(x, attnOut, nil)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
@@ -1495,6 +1511,18 @@ func (p *Plane) forwardFromEmbeddingsWithHook(embeddings *mlx.Array, cache kvcac
 	var releases []outputView
 	defer releaseOutputViews(releases)
 	h := embeddings
+	if numLayers > 0 {
+		if normWeight := p.weightProv.LayerInputNormWeight(0); normWeight != nil && !normWeight.IsNil() {
+			normDtype := normWeight.Dtype()
+			if h.Dtype() != normDtype {
+				var err error
+				h, err = mlx.Astype(h, normDtype, nil)
+				if err != nil {
+					return nil, nil, fmt.Errorf("cast embeddings to norm dtype: %w", err)
+				}
+			}
+		}
+	}
 	var preparedNorm *mlx.Array
 
 	for i := 0; i < numLayers; i++ {
@@ -1565,11 +1593,15 @@ func (p *Plane) forwardFromEmbeddingsWithHook(embeddings *mlx.Array, cache kvcac
 		return nil, nil, fmt.Errorf("lm head matmul: %w", err)
 	}
 
-	if err := mlx.Eval(logits); err != nil {
-		return nil, nil, err
-	}
-	if err := mlx.Synchronize(nil); err != nil {
-		return nil, nil, err
+	// Only eagerly evaluate when ANE stages are active (cross-device sync).
+	// In gpu_fallback mode, keep computation lazy for JIT compatibility.
+	if !p.gpuFallback {
+		if err := mlx.Eval(logits); err != nil {
+			return nil, nil, err
+		}
+		if err := mlx.Synchronize(nil); err != nil {
+			return nil, nil, err
+		}
 	}
 	return logits, cache, nil
 }
@@ -1584,19 +1616,21 @@ func (p *Plane) ForwardDecode(inputs *mlx.Array, cache kvcache.Cache) (*mlx.Arra
 	if inputs == nil {
 		return nil, nil, fmt.Errorf("input is nil")
 	}
-	// Normalize 1D inputs to 2D [1, seq_len].
-	normalized := inputs
-	if inputs.Ndim() == 1 {
-		shape := inputs.Shape()
-		var err error
-		normalized, err = mlx.Reshape(inputs, []int{1, shape[0]}, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("reshape 1d input: %w", err)
-		}
+	// Always cast to int32 (argmax sampling produces uint32).
+	// Use unconditional cast — Astype is a no-op for matching dtypes,
+	// and during JIT tracing, Dtype() on tracers may not be reliable.
+	normalized, err := mlx.Astype(inputs, mlx.Int32, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cast to int32: %w", err)
+	}
+	// Normalize to 2D [1, seq_len].
+	normalized, err = mlx.Reshape(normalized, []int{1, -1}, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reshape input: %w", err)
 	}
 	embeddings, err := p.embed.EmbedTokens(normalized)
 	if err != nil {
-		return nil, nil, fmt.Errorf("embed lookup: %w", err)
+		return nil, nil, fmt.Errorf("failed to lookup embeddings: %w", err)
 	}
 	return p.forwardFromEmbeddingsWithHook(embeddings, cache, nil)
 }
