@@ -1,5 +1,14 @@
+# Build artifacts
+*.test
+/bench-note
+/mlx-ane-generate
+/mlx-ane-train
+/setup-hub
+
+# Data
 .autoresearch-key
 results.tsv
-/bench-note
-/mlx-lm-generate-ane
-/setup-hub
+
+# Tool caches
+.claude/
+.gocache/
