@@ -29,16 +29,12 @@ type SharedEventRuntime interface {
 // runtimes that expose both a reusable IOSurface output plane and plan-owned
 // shared events.
 //
-// ANEDraftModel, SurfaceDecodeFFN, and NanochatDecodeRuntime all satisfy this
-// interface. Callers that only need Metal/ANE handoff should depend on this
-// interface instead of the concrete runtime.
+// ANEDraftModel satisfies this interface. Callers that only need Metal/ANE
+// handoff should depend on this interface instead of the concrete runtime.
 type SurfaceSyncRuntime interface {
 	SurfaceOutputRuntime
 	SharedEventRuntime
 	Close()
 }
 
-var (
-	_ SurfaceSyncRuntime = (*ANEDraftModel)(nil)
-	_ SurfaceSyncRuntime = (*SurfaceDecodeFFN)(nil)
-)
+var _ SurfaceSyncRuntime = (*ANEDraftModel)(nil)

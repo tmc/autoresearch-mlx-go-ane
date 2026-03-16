@@ -18,33 +18,12 @@ import (
 
 const modelPathPrefix = "@model_path/"
 
-type ffnForwardModelKey struct {
-	dim       int
-	hiddenDim int
-	seq       int
-	rms2Hash  uint64
-	w1Hash    uint64
-	w3Hash    uint64
-	w2Hash    uint64
-}
-
-type ffnBackwardModelKey struct {
-	dim       int
-	hiddenDim int
-	seq       int
-	w1Hash    uint64
-	w3Hash    uint64
-	w2Hash    uint64
-}
-
 type modelWeightFile = anereify.ModelWeightFile
 
 // ModelWeightFile is one MIL weight payload.
 //
 // Path must use the @model_path/ prefix expected by ANE MIL descriptors.
 type ModelWeightFile = modelWeightFile
-
-var _ FFNExecutor = (*applePrivateExecutor)(nil)
 
 var (
 	modelMirrorRootMu sync.RWMutex
@@ -73,211 +52,6 @@ func descriptorMirrorBaseDir() string {
 	return os.TempDir()
 }
 
-func (e *applePrivateExecutor) FFNForward(
-	ctx context.Context,
-	x, rms2, w1, w3, w2 []float32,
-	dim, hiddenDim, seq int,
-) ([]float32, error) {
-	if e == nil {
-		return nil, fmt.Errorf("appleneuralengine ffn forward: executor is nil")
-	}
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-	if dim <= 0 || hiddenDim <= 0 || seq <= 0 {
-		return nil, fmt.Errorf(
-			"appleneuralengine ffn forward: invalid dims dim=%d hiddenDim=%d seq=%d",
-			dim, hiddenDim, seq,
-		)
-	}
-	if len(x) != dim*seq {
-		return nil, fmt.Errorf("appleneuralengine ffn forward: x len=%d want=%d", len(x), dim*seq)
-	}
-	mapSeq := effectiveFFNMapSeq(seq)
-	mapInput := x
-	if mapSeq != seq {
-		padded, err := padANEChannelMajorSeq(x, dim, seq, mapSeq)
-		if err != nil {
-			return nil, fmt.Errorf("appleneuralengine ffn forward: pad input: %w", err)
-		}
-		mapInput = padded
-	}
-
-	key := ffnForwardModelKey{
-		dim:       dim,
-		hiddenDim: hiddenDim,
-		seq:       mapSeq,
-		rms2Hash:  hashFloat32Slice(rms2),
-		w1Hash:    hashFloat32Slice(w1),
-		w3Hash:    hashFloat32Slice(w3),
-		w2Hash:    hashFloat32Slice(w2),
-	}
-
-	e.mu.Lock()
-	model, ok := e.ffnForward[key]
-	if !ok {
-		built, err := buildFFNForwardModel(key, rms2, w1, w3, w2)
-		if err != nil {
-			e.mu.Unlock()
-			return nil, err
-		}
-		model = built
-		e.ffnForward[key] = model
-	}
-	e.mu.Unlock()
-
-	outChannels := 2*dim + 3*hiddenDim
-	packed, err := evalModelSingleIO(
-		ctx, model, mapInput, outChannels*mapSeq, "appleneuralengine ffn forward",
-	)
-	if err != nil {
-		return nil, err
-	}
-	if mapSeq == seq {
-		return packed, nil
-	}
-	trimmed, err := trimANEChannelMajorSeq(packed, outChannels, mapSeq, seq)
-	if err != nil {
-		return nil, fmt.Errorf("appleneuralengine ffn forward: trim output: %w", err)
-	}
-	return trimmed, nil
-}
-
-func (e *applePrivateExecutor) FFNBackward(
-	ctx context.Context,
-	dffn, h1, h3, w1, w3, w2 []float32,
-	dim, hiddenDim, seq int,
-) ([]float32, error) {
-	if e == nil {
-		return nil, fmt.Errorf("appleneuralengine ffn backward: executor is nil")
-	}
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-	if dim <= 0 || hiddenDim <= 0 || seq <= 0 {
-		return nil, fmt.Errorf(
-			"appleneuralengine ffn backward: invalid dims dim=%d hiddenDim=%d seq=%d",
-			dim, hiddenDim, seq,
-		)
-	}
-	in, err := buildFFNBackwardInputANE(
-		dffn,
-		FFNForwardTaps{H1: h1, H3: h3},
-		dim, hiddenDim, seq,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("appleneuralengine ffn backward: build input: %w", err)
-	}
-	mapSeq := effectiveFFNMapSeq(seq)
-	mapIn := in
-	if mapSeq != seq {
-		padded, err := padANEChannelMajorSeq(in, dim+2*hiddenDim, seq, mapSeq)
-		if err != nil {
-			return nil, fmt.Errorf("appleneuralengine ffn backward: pad input: %w", err)
-		}
-		mapIn = padded
-	}
-
-	key := ffnBackwardModelKey{
-		dim:       dim,
-		hiddenDim: hiddenDim,
-		seq:       mapSeq,
-		w1Hash:    hashFloat32Slice(w1),
-		w3Hash:    hashFloat32Slice(w3),
-		w2Hash:    hashFloat32Slice(w2),
-	}
-
-	e.mu.Lock()
-	model, ok := e.ffnBackward[key]
-	if !ok {
-		built, err := buildFFNBackwardModel(key, w1, w3, w2)
-		if err != nil {
-			e.mu.Unlock()
-			return nil, err
-		}
-		model = built
-		e.ffnBackward[key] = model
-	}
-	e.mu.Unlock()
-
-	outChannels := dim + 2*hiddenDim
-	packed, err := evalModelSingleIO(
-		ctx, model, mapIn, outChannels*mapSeq, "appleneuralengine ffn backward",
-	)
-	if err != nil {
-		return nil, err
-	}
-	if mapSeq == seq {
-		return packed, nil
-	}
-	trimmed, err := trimANEChannelMajorSeq(packed, outChannels, mapSeq, seq)
-	if err != nil {
-		return nil, fmt.Errorf("appleneuralengine ffn backward: trim output: %w", err)
-	}
-	return trimmed, nil
-}
-
-func buildFFNForwardModel(
-	key ffnForwardModelKey,
-	rms2, w1, w3, w2 []float32,
-) (appleneuralengine.ANEInMemoryModel, error) {
-	blobs, err := buildFFNWeightBlobs(rms2, w1, w3, w2, key.dim, key.hiddenDim)
-	if err != nil {
-		return appleneuralengine.ANEInMemoryModel{}, fmt.Errorf(
-			"appleneuralengine ffn forward model build: create weight blobs: %w", err,
-		)
-	}
-	files := []modelWeightFile{
-		{Path: ffnRMS2BlobPathInMIL, Blob: blobs.RMS2},
-		{Path: ffnW1BlobPathInMIL, Blob: blobs.W1},
-		{Path: ffnW3BlobPathInMIL, Blob: blobs.W3},
-		{Path: ffnW2BlobPathInMIL, Blob: blobs.W2},
-	}
-	milText, err := ffnFwdTapsMILText(key.dim, key.hiddenDim, key.seq)
-	if err != nil {
-		return appleneuralengine.ANEInMemoryModel{}, fmt.Errorf(
-			"appleneuralengine ffn forward model build: generate MIL text: %w", err,
-		)
-	}
-	return buildModelFromMILText(
-		"appleneuralengine ffn forward model build",
-		milText,
-		files,
-	)
-}
-
-func buildFFNBackwardModel(
-	key ffnBackwardModelKey,
-	w1, w3, w2 []float32,
-) (appleneuralengine.ANEInMemoryModel, error) {
-	blobs, err := buildFFNBackwardWeightBlobs(w1, w3, w2, key.dim, key.hiddenDim)
-	if err != nil {
-		return appleneuralengine.ANEInMemoryModel{}, fmt.Errorf(
-			"appleneuralengine ffn backward model build: create weight blobs: %w", err,
-		)
-	}
-	files := []modelWeightFile{
-		{Path: ffnW2TBlobPathInMIL, Blob: blobs.W2T},
-		{Path: ffnW1TBlobPathInMIL, Blob: blobs.W1T},
-		{Path: ffnW3TBlobPathInMIL, Blob: blobs.W3T},
-	}
-	milText, err := ffnBwdMILText(key.dim, key.hiddenDim, key.seq)
-	if err != nil {
-		return appleneuralengine.ANEInMemoryModel{}, fmt.Errorf(
-			"appleneuralengine ffn backward model build: generate MIL text: %w", err,
-		)
-	}
-	return buildModelFromMILText(
-		"appleneuralengine ffn backward model build",
-		milText,
-		files,
-	)
-}
-
 func buildModelFromMILText(
 	label string,
 	milText string,
@@ -298,9 +72,6 @@ func buildModelFromMILText(
 		return appleneuralengine.ANEInMemoryModel{}, fmt.Errorf("%s: create in-memory model failed", label)
 	}
 	model := appleneuralengine.ANEInMemoryModelFromID(modelObj.GetID())
-	if mask := benchmarkPerfStatsMask(); mask != 0 {
-		model.SetPerfStatsMask(mask)
-	}
 	options := foundation.NewMutableDictionaryWithCapacity(0)
 	compileLabel := label + " compile"
 	if usedMILInit {

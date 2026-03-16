@@ -14,7 +14,6 @@ type IntegrationPath string
 
 const (
 	IntegrationPathSpeculativeDraft    IntegrationPath = "speculative_draft"
-	IntegrationPathSurfaceDecodeFFN    IntegrationPath = "surface_decode_ffn"
 	IntegrationPathModelSpecificDecode IntegrationPath = "model_specific_decode"
 )
 
@@ -57,7 +56,6 @@ func (s DecodeModelSpec) HasWidenedAttention() bool {
 type IntegrationAssessment struct {
 	RecommendedPath          IntegrationPath
 	AvoidLinearHook          bool
-	SupportsSurfaceDecodeFFN bool
 	SupportsCurrentDraftMIL  bool
 	NeedsModelSpecificDecode bool
 	DraftLowConfidence       bool
@@ -70,10 +68,6 @@ func AssessDecodeModel(spec DecodeModelSpec) IntegrationAssessment {
 	a := IntegrationAssessment{
 		AvoidLinearHook: true,
 		Reasons:         []string{"prefer block-level decode integration over per-linear hooks"},
-	}
-
-	if spec.MLPKind == MLPKindSwiGLU {
-		a.SupportsSurfaceDecodeFFN = true
 	}
 
 	if spec.HasCustomDecodeSemantics() {
@@ -103,10 +97,6 @@ func AssessDecodeModel(spec DecodeModelSpec) IntegrationAssessment {
 	if spec.HasWidenedAttention() {
 		a.DraftLowConfidence = true
 		a.Reasons = append(a.Reasons, "widened attention is currently lower-confidence for ANE draft quality")
-	}
-
-	if a.RecommendedPath == "" && a.SupportsSurfaceDecodeFFN {
-		a.RecommendedPath = IntegrationPathSurfaceDecodeFFN
 	}
 	return a
 }

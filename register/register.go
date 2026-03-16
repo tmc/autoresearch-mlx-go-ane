@@ -133,21 +133,7 @@ func (decodePlaneRuntime) SetModelMirrorRoot(cacheDir string) {
 }
 
 func (decodePlaneRuntime) NewQwen35Stage(dim, hidden int, cacheDir string, w1, w3, w2 []float32) (anehooks.DecodePlaneStage, anehooks.DecodePlaneBridge, error) {
-	cfg := mlxgoane.DefaultMultiSurfaceEvalPlanConfig()
-	cfg.EnableMetalWait = true
-	cfg.EnableMetalSignal = true
-	cfg.WaitValue = 1
-	cfg.SignalValue = 1
-	stage, err := mlxgoane.NewSurfaceEspressoFFN(dim, hidden, 1, cacheDir, w1, w3, w2, cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	bridge, err := mlxgoane.NewMLXSurfaceSyncBridge(stage.WaitEvent(), stage.SignalEvent())
-	if err != nil {
-		stage.Close()
-		return nil, nil, err
-	}
-	return decodePlaneStageAdapter{stage: stage}, decodePlaneBridgeAdapter{bridge: bridge}, nil
+	return nil, nil, fmt.Errorf("espresso FFN stage not available; use NewQwen35DirectBlock instead")
 }
 
 func (decodePlaneRuntime) NewQwen35DirectBlock(prog *modelir.Program, cfg anehooks.DecodePlaneDirectBlockConfig) (anehooks.DecodePlaneDirectBlock, anehooks.DecodePlaneBridge, error) {
@@ -217,53 +203,6 @@ func (decodePlaneRuntime) NewQwen35DirectBlock(prog *modelir.Program, cfg anehoo
 		return nil, nil, err
 	}
 	return decodePlaneDirectBlockAdapter{draft: draft}, decodePlaneBridgeAdapter{bridge: bridge}, nil
-}
-
-type decodePlaneStageAdapter struct {
-	stage *mlxgoane.SurfaceEspressoFFN
-}
-
-func (a decodePlaneStageAdapter) Close() { a.stage.Close() }
-
-func (a decodePlaneStageAdapter) InitStats() anehooks.DecodePlaneInitStats {
-	s := a.stage.InitStats()
-	return anehooks.DecodePlaneInitStats{
-		ArtifactCacheHit: s.ArtifactCacheHit,
-		ArtifactReady:    s.ArtifactReady,
-		CompileLoad:      s.CompileLoad,
-		Map:              s.Map,
-	}
-}
-
-func (a decodePlaneStageAdapter) ModelDim() int { return a.stage.ModelDim() }
-func (a decodePlaneStageAdapter) MapSeq() int   { return a.stage.MapSeq() }
-func (a decodePlaneStageAdapter) WaitEvent() anehooks.DecodePlaneEvent {
-	return decodePlaneEventAdapter{event: a.stage.WaitEvent()}
-}
-func (a decodePlaneStageAdapter) SignalEvent() anehooks.DecodePlaneEvent {
-	return decodePlaneEventAdapter{event: a.stage.SignalEvent()}
-}
-func (a decodePlaneStageAdapter) WaitValue() uint64   { return a.stage.WaitValue() }
-func (a decodePlaneStageAdapter) SignalValue() uint64 { return a.stage.SignalValue() }
-func (a decodePlaneStageAdapter) InputShape() []int   { return a.stage.InputShape() }
-func (a decodePlaneStageAdapter) InputSurface() anehooks.DecodePlaneInputSurface {
-	return decodePlaneInputSurfaceAdapter{surface: a.stage.InputSurface()}
-}
-func (a decodePlaneStageAdapter) OutputSurface() any { return a.stage.OutputSurface() }
-
-func (a decodePlaneStageAdapter) EvalPreparedSurfaceAsync(ctx context.Context) <-chan anehooks.DecodePlaneAsyncResult {
-	src := a.stage.EvalPreparedSurfaceAsync(ctx)
-	dst := make(chan anehooks.DecodePlaneAsyncResult, 1)
-	go func() {
-		res := <-src
-		dst <- anehooks.DecodePlaneAsyncResult{Err: res.Err}
-	}()
-	return dst
-}
-
-func (a decodePlaneStageAdapter) EvalPreparedSurface(ctx context.Context) error {
-	_, err := a.stage.EvalPreparedSurface(ctx)
-	return err
 }
 
 type decodePlaneEventAdapter struct {
@@ -468,6 +407,3 @@ func parseLinearRouteProfile(raw string) (mlxgoane.LinearRouteProfile, error) {
 	}
 }
 
-func durationMillis(d time.Duration) float64 {
-	return float64(d) / float64(time.Millisecond)
-}

@@ -31,11 +31,9 @@ type linearModelKey struct {
 }
 
 type applePrivateExecutor struct {
-	mu          sync.Mutex
-	linear      map[linearModelKey]appleneuralengine.ANEInMemoryModel
-	ffnForward  map[ffnForwardModelKey]appleneuralengine.ANEInMemoryModel
-	ffnBackward map[ffnBackwardModelKey]appleneuralengine.ANEInMemoryModel
-	last        linearTelemetry
+	mu     sync.Mutex
+	linear map[linearModelKey]appleneuralengine.ANEInMemoryModel
+	last   linearTelemetry
 }
 
 type linearTelemetry struct {
@@ -53,9 +51,7 @@ func NewApplePrivateExecutor() (LinearExecutor, error) {
 		return nil, fmt.Errorf("appleneuralengine: ANE not available on this host")
 	}
 	return &applePrivateExecutor{
-		linear:      make(map[linearModelKey]appleneuralengine.ANEInMemoryModel),
-		ffnForward:  make(map[ffnForwardModelKey]appleneuralengine.ANEInMemoryModel),
-		ffnBackward: make(map[ffnBackwardModelKey]appleneuralengine.ANEInMemoryModel),
+		linear: make(map[linearModelKey]appleneuralengine.ANEInMemoryModel),
 	}, nil
 }
 
@@ -202,9 +198,6 @@ func compileAndLoadLinearModel(source string, descObj objectivec.IObject) (apple
 		)
 	}
 	model := appleneuralengine.ANEInMemoryModelFromID(modelObj.GetID())
-	if mask := benchmarkPerfStatsMask(); mask != 0 {
-		model.SetPerfStatsMask(mask)
-	}
 	options := foundation.NewMutableDictionaryWithCapacity(0)
 
 	compileStart := time.Now()

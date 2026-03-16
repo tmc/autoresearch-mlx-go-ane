@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -28,7 +27,6 @@ import (
 )
 
 const milTransformerTestEnv = "MLXGO_ANE_TEST_MIL_TRANSFORMER"
-const milFastPathChildEnv = "MLXGO_ANE_TEST_MIL_FAST_CHILD"
 const milFeatureProbeEnv = "MLXGO_ANE_TEST_MIL_FEATURE_PROBE"
 const milTransformerFeatureMatrixEnv = "MLXGO_ANE_TEST_MIL_TRANSFORMER_FEATURE_MATRIX"
 const milFeatureSchemaProbeEnv = "MLXGO_ANE_TEST_MIL_FEATURE_SCHEMA"
@@ -5102,153 +5100,6 @@ func TestMILTransformerProbeMatrix(t *testing.T) {
 	}
 }
 
-func TestMILIsMILModelFastPath(t *testing.T) {
-	if os.Getenv(milTransformerTestEnv) == "" {
-		t.Skipf("set %s=1 to run MIL fast-path proof", milTransformerTestEnv)
-	}
-	if !appleneuralengine.GetANEDeviceInfoClass().HasANE() {
-		t.Skip("ANE unavailable on this host")
-	}
-	if os.Getenv(milFastPathChildEnv) != "" {
-		if err := runMILIsMILModelFastPathProof(t); err != nil {
-			t.Fatalf("MIL fast-path child proof failed: %v", err)
-		}
-		return
-	}
-
-	processRetries := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_PROCESS_RETRIES", 3)
-	if processRetries < 1 {
-		processRetries = 1
-	}
-	for attempt := 1; attempt <= processRetries; attempt++ {
-		cmd := exec.Command(os.Args[0], "-test.run", "^TestMILIsMILModelFastPath$", "-test.v")
-		cmd.Env = append(os.Environ(), milFastPathChildEnv+"=1")
-		out, err := cmd.CombinedOutput()
-		if err == nil {
-			t.Logf(
-				"MIL fast-path proof succeeded in isolated process attempt %d/%d",
-				attempt,
-				processRetries,
-			)
-			return
-		}
-		output := string(out)
-		if strings.Contains(strings.ToLower(output), "program iosurfaces map failure") {
-			t.Logf(
-				"MIL fast-path isolated process attempt %d/%d hit mapper failure; retrying in fresh process",
-				attempt,
-				processRetries,
-			)
-			continue
-		}
-		t.Fatalf(
-			"MIL fast-path isolated process attempt %d/%d failed: %v\n%s",
-			attempt,
-			processRetries,
-			err,
-			output,
-		)
-	}
-	t.Skipf("MIL fast-path proof skipped: mapper failure persisted across %d isolated processes", processRetries)
-}
-
-func runMILIsMILModelFastPathProof(t *testing.T) error {
-	t.Helper()
-	dim := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_DIM", 768)
-	hiddenDim := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_HIDDEN_DIM", 3072)
-	seq := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_SEQ", 1)
-	maxUS := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_MAX_US", 5000)
-	iterations := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_ITERS", 5)
-	retries := envIntWithDefault(t, "MLXGO_ANE_TEST_MIL_FAST_RETRIES", 4)
-
-	milText, err := ffnFwdTapsMILText(dim, hiddenDim, seq)
-	if err != nil {
-		return fmt.Errorf("ffnFwdTapsMILText: %w", err)
-	}
-	rms2 := make([]float32, dim)
-	for i := range rms2 {
-		rms2[i] = 1
-	}
-	w1 := makeDeterministicTensor(hiddenDim*dim, 0.0007, 113)
-	w3 := makeDeterministicTensor(hiddenDim*dim, 0.0006, 127)
-	w2 := makeDeterministicTensor(dim*hiddenDim, 0.0005, 131)
-	blobs, err := buildFFNWeightBlobs(rms2, w1, w3, w2, dim, hiddenDim)
-	if err != nil {
-		return fmt.Errorf("buildFFNWeightBlobs: %w", err)
-	}
-	files := []modelWeightFile{
-		{Path: ffnRMS2BlobPathInMIL, Blob: blobs.RMS2},
-		{Path: ffnW1BlobPathInMIL, Blob: blobs.W1},
-		{Path: ffnW3BlobPathInMIL, Blob: blobs.W3},
-		{Path: ffnW2BlobPathInMIL, Blob: blobs.W2},
-	}
-
-	input := makeDeterministicTensor(dim*seq, 0.001, 149)
-	outputCount := (2*dim + 3*hiddenDim) * seq
-	best, attempts, err := runMILProbeCaseWithMapRetry(
-		t,
-		"mil fast-path ffn",
-		milText,
-		files,
-		input,
-		outputCount,
-		iterations,
-		retries,
-	)
-	if err != nil {
-		if isMILKnownMapFailure(err) {
-			t.Logf("MIL fast-path fused-FFN strict-client probe hit mapper failure after %d attempts", attempts)
-			daemonBest, daemonErr := runMILProbeCaseDaemonBacked(
-				t,
-				"mil fast-path ffn daemon-backed",
-				milText,
-				files,
-				input,
-				outputCount,
-				iterations,
-			)
-			if daemonErr == nil {
-				if daemonBest > time.Duration(maxUS)*time.Microsecond {
-					return fmt.Errorf("MIL fast-path daemon-backed path too slow: best=%s max=%dµs", daemonBest, maxUS)
-				}
-				t.Logf("MIL fast-path daemon-backed proof best eval latency: %s", daemonBest)
-				return nil
-			}
-			t.Logf("MIL fast-path daemon-backed probe failed; trying linear fallback proof: %v", daemonErr)
-			fallbackBest, fallbackAttempts, fallbackErr := runMILFastPathLinearFallback(
-				t,
-				dim,
-				maxUS,
-				retries,
-			)
-			if fallbackErr == nil {
-				t.Logf(
-					"MIL fast-path fallback linear proof succeeded: best=%s attempts=%d",
-					fallbackBest,
-					fallbackAttempts,
-				)
-				return nil
-			}
-			return fmt.Errorf(
-				"MIL fast-path mapper failure after FFN (%d attempts) and linear fallback (%d attempts): %w",
-				attempts,
-				fallbackAttempts,
-				fallbackErr,
-			)
-		}
-		return fmt.Errorf("MIL fast-path ffn probe failed: %w", err)
-	}
-	if best > time.Duration(maxUS)*time.Microsecond {
-		return fmt.Errorf("MIL fast-path too slow: best=%s max=%dµs", best, maxUS)
-	}
-	t.Logf(
-		"MIL fast-path proof best eval latency: %s (max %dµs, attempts=%d)",
-		best,
-		maxUS,
-		attempts,
-	)
-	return nil
-}
 
 func runMILProbeCaseWithMapRetry(
 	t *testing.T,

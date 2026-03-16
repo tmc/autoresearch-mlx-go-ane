@@ -20,9 +20,6 @@ func TestAssessDecodeModelQwenLike(t *testing.T) {
 	if !got.AvoidLinearHook {
 		t.Fatal("AvoidLinearHook = false, want true")
 	}
-	if !got.SupportsSurfaceDecodeFFN {
-		t.Fatal("SupportsSurfaceDecodeFFN = false, want true")
-	}
 	if !got.SupportsCurrentDraftMIL {
 		t.Fatal("SupportsCurrentDraftMIL = false, want true")
 	}
@@ -52,9 +49,6 @@ func TestAssessDecodeModelNanochatLike(t *testing.T) {
 	}
 	if !got.AvoidLinearHook {
 		t.Fatal("AvoidLinearHook = false, want true")
-	}
-	if got.SupportsSurfaceDecodeFFN {
-		t.Fatal("SupportsSurfaceDecodeFFN = true, want false")
 	}
 	if got.SupportsCurrentDraftMIL {
 		t.Fatal("SupportsCurrentDraftMIL = true, want false")

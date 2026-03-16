@@ -8,13 +8,33 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/tmc/apple/foundation"
+	"github.com/tmc/apple/objc"
 	"github.com/tmc/apple/objectivec"
 	"github.com/tmc/apple/private/appleneuralengine"
 	"github.com/tmc/mlx-go/modelir"
 )
+
+const ffnMILHeader = `program(1.3)
+[buildInfo = dict<string, string>({{"coremlc-component-MIL", "3510.2.1"}, {"coremlc-version", "3505.4.1"}, {"coremltools-component-milinternal", ""}, {"coremltools-version", "9.0"}})]
+{
+`
+
+func testObjectDescription(o interface{ GetID() objc.ID }) string {
+	if o.GetID() == 0 {
+		return "<nil>"
+	}
+	descID := objc.Send[objc.ID](o.GetID(), objc.Sel("description"))
+	if descID == 0 {
+		return "<no description>"
+	}
+	return foundation.NSStringFromID(descID).String()
+}
 
 func testTransformerConfig(layers int) MILTransformerConfig {
 	return MILTransformerConfig{
@@ -360,4 +380,47 @@ func nearlyEqualFloat32s(a, b []float32, tol float32) bool {
 		}
 	}
 	return true
+}
+
+func envInt(key string, dflt int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return dflt
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return dflt
+	}
+	return n
+}
+
+func envIntWithDefault(t *testing.T, key string, dflt int) int {
+	t.Helper()
+	v := os.Getenv(key)
+	if v == "" {
+		return dflt
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		t.Fatalf("parse %s=%q: %v", key, v, err)
+	}
+	if n <= 0 {
+		t.Fatalf("%s must be > 0 (got %d)", key, n)
+	}
+	return n
+}
+
+func makeDeterministicTensor(n int, scale float32, period int) []float32 {
+	if n < 0 {
+		return nil
+	}
+	if period <= 0 {
+		period = 1
+	}
+	mid := period / 2
+	out := make([]float32, n)
+	for i := range out {
+		out[i] = float32((i%period)-mid) * scale
+	}
+	return out
 }

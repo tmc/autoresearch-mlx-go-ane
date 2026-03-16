@@ -146,8 +146,6 @@ func compileAndLoadModelDirectory(
 	if modelObj.GetID() == 0 {
 		return nil, fmt.Errorf("compile/load model: _ANEModel modelAtURL:key: returned nil")
 	}
-	applyBenchmarkPerfStatsMaskObject(modelObj)
-
 	options := foundation.NewMutableDictionaryWithCapacity(0)
 	if _, err := client.CompileModelOptionsQosError(modelObj, options, qos); err != nil {
 		return nil, err
@@ -188,8 +186,6 @@ func loadModelDirectoryWithoutCompile(
 	if modelObj.GetID() == 0 {
 		return nil, fmt.Errorf("load model: _ANEModel modelAtURL:key: returned nil")
 	}
-	applyBenchmarkPerfStatsMaskObject(modelObj)
-
 	options := foundation.NewMutableDictionaryWithCapacity(0)
 	if _, err := client.LoadModelOptionsQosError(modelObj, options, qos); err != nil {
 		return nil, fmt.Errorf("load model: %w", err)
@@ -201,15 +197,6 @@ func loadModelDirectoryWithoutCompile(
 		qos:     qos,
 		dir:     dir,
 	}, nil
-}
-
-func applyBenchmarkPerfStatsMaskObject(model objectivec.IObject) {
-	mask := benchmarkPerfStatsMask()
-	if mask == 0 || model.GetID() == 0 {
-		return
-	}
-	defer func() { recover() }()
-	appleneuralengine.ANEModelFromID(model.GetID()).SetPerfStatsMask(mask)
 }
 
 func writeMILModelDirectory(dir string, milText string, files []ModelWeightFile) error {
