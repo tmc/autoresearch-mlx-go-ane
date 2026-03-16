@@ -12,11 +12,7 @@ To set up a new experiment, work with the user to:
    - `experiment.go` — primary experiment file. Inference config, sampling params, model selection.
    - `harness.go` — evaluation harness, model loading, generation timing. Do not modify.
    - `bench_test.go` — Go benchmarks for measuring generation throughput. Do not modify.
-   - `cmd/mlx-lm-generate-ane/main.go` — the ANE-focused CLI. Editable with care.
-   - `cmd/mlx-lm-generate-ane/generate.go` — token generation pipeline. Editable.
-   - `cmd/mlx-lm-generate-ane/kvcache.go` — KV cache configuration. Editable.
-   - `cmd/mlx-lm-generate-ane/ane.go` — ANE decode plane integration. Editable.
-   - `cmd/mlx-lm-generate-ane/stats.go` — statistics reporting. Editable.
+   - `cmd/mlx-ane-generate/` — the ANE-focused generation CLI. Editable with care.
 4. **Verify model access**: Ensure the default model (`mlx-community/Qwen2.5-3B-Instruct-4bit`) is cached. Run `go test -bench=. -benchtime=1x -count=1 -run=^$ -timeout=5m` to confirm.
 5. **Install benchstat**: `go install golang.org/x/perf/cmd/benchstat@latest`
 6. **Build bench-note**: `go build -o bench-note ./cmd/bench-note/`
@@ -36,13 +32,9 @@ You have two tiers of editable files:
 - Model selection, prompt, token count, sampling parameters, cache type, ANE mode.
 - This is the fastest iteration loop — change constants, rebuild, benchmark.
 
-**Tier 2 — Generation internals** (`cmd/mlx-lm-generate-ane/` package):
-- `generate.go` — token generation pipeline, iterator setup, streaming detokenization
-- `kvcache.go` — KV cache configuration and creation
-- `ane.go` — ANE decode plane mode selection and model wrapping
-- `stats.go` — statistics computation and reporting
-
-These are more impactful but riskier. Changes here can affect correctness, so verify carefully.
+**Tier 2 — Generation internals** (`cmd/mlx-ane-generate/` package):
+- Generation pipeline, KV cache configuration, ANE decode plane integration.
+- More impactful but riskier. Changes here can affect correctness, so verify carefully.
 
 ### Read-only files
 
@@ -183,28 +175,9 @@ LOOP FOREVER:
 - `UseChatTemplate` — whether to use chat template (affects prompt token count)
 - `Seed` — random seed
 
-### Tier 2: cmd/mlx-lm-generate-ane/ (deeper changes)
+### Tier 2: cmd/mlx-ane-generate/ (deeper changes)
 
-#### Generation pipeline (generate.go)
-- `Generate()` — the token generation iterator. You can try:
-  - Different sampling strategies
-  - Batched token generation
-  - Modified decode options (strided cache, eager prefill)
-  - Custom token iteration patterns
-
-#### KV cache (kvcache.go)
-- `buildCacheConfig()` — cache configuration. You can try:
-  - Different cache sizes for rotating cache
-  - Quantized KV cache (kv-bits)
-  - Pre-allocation strategies
-
-#### ANE integration (ane.go)
-- `wrapANEDecodePlane()` — ANE model wrapping. You can try:
-  - Different ANE modes as they become available
-  - Cache directory configuration
-  - Compile mode settings
-
-#### Important constraints for Tier 2 changes
+- Generation pipeline, KV cache, ANE decode plane integration.
 - **Don't break the harness API**: The benchmark tests call `setupEngine`, `generateN`, `encodePrompt`, `warmup` — these must keep their signatures.
 - **Don't modify harness.go or bench_test.go** — these are the ground truth.
 - **Test carefully** — a wrong configuration can silently produce invalid results.
