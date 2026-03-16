@@ -12,9 +12,10 @@ import (
 	"github.com/tmc/mlx-go-lm/mlxlm"
 	"github.com/tmc/mlx-go-lm/mlxlm/decode"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
-	"github.com/tmc/mlx-go-lm/mlxlm/runtime/anedecode"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlx/random"
+
+	anedecode "github.com/tmc/mlx-go-ane/decode"
 )
 
 // BenchmarkInference benchmarks prefill, decode, and end-to-end generation
@@ -49,6 +50,7 @@ func BenchmarkInference(b *testing.B) {
 		aneMode string
 	}{
 		{"GPU", "off"},
+		{"Plane", "gpu_fallback"},
 		{"ANE", ANEDecodePlaneMode},
 	}
 
@@ -150,7 +152,7 @@ func newBenchEngine(modelID, aneMode string) (*benchEngine, error) {
 
 	aneActive := false
 	if aneMode != "off" {
-		wrapped, err := anedecode.Wrap(model, anedecode.ANEDecodePlaneOptions{
+		wrapped, err := anedecode.Wrap(model, anedecode.Options{
 			Mode:      aneMode,
 			ModelPath: resolvedPath,
 			Warn: func(format string, args ...any) {
@@ -188,7 +190,10 @@ func (e *benchEngine) warmup() {
 	}
 	input.Free()
 
-	if warmer, ok := e.model.(anedecode.ANEDecodePlaneWarmer); ok {
+	type prewarmable interface {
+		PrewarmANEDecodePlane()
+	}
+	if warmer, ok := e.model.(prewarmable); ok {
 		warmer.PrewarmANEDecodePlane()
 	}
 	mlx.ClearCache()
