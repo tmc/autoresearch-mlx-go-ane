@@ -387,7 +387,7 @@ func (decodePlaneRuntime) NewQwen35Stage(dim, hidden int, cacheDir string, w1, w
 		return nil, nil, fmt.Errorf("compile FFN MIL: %w", err)
 	}
 
-	// Build eval plan with Metal shared events.
+	// Build eval plan without Metal shared events.
 	mapSeq := 1
 	// Metal shared events are disabled for MIL FFN stages because the
 	// input path uses CPU-side IOSurface writes (GPU aliasing is disabled
