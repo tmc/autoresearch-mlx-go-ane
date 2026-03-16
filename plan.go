@@ -1,11 +1,10 @@
-//go:build ignore
 
 package mlxgoane
 
 import (
 	"fmt"
 
-	"github.com/tmc/mlx-go/internal/exp/mlxfntxt"
+	"github.com/tmc/mlx-go/exp/mlxfntxt"
 )
 
 // Status values for an op lowering step.

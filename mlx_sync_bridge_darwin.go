@@ -1,4 +1,4 @@
-//go:build ignore
+//go:build darwin && ane_appleneuralengine
 
 package mlxgoane
 
@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tmc/mlx-go-ane/internal/mlxaneext"
-	"github.com/tmc/mlx-go/internal/mlxcext"
+	"github.com/tmc/mlx-go/exp/mlxcext"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlxc"
 )

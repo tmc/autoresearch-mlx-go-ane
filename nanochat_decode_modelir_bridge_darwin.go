@@ -1,4 +1,4 @@
-//go:build ignore
+//go:build darwin && ane_appleneuralengine && cgo
 
 package mlxgoane
 
@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/tmc/mlx-go/internal/modelir"
-	"github.com/tmc/mlx-go/internal/modelir/target/coremltools"
+	"github.com/tmc/mlx-go/exp/modelir/target/coremltools"
 )
 
 const (
