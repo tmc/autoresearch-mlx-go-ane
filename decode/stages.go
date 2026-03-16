@@ -229,10 +229,7 @@ func (p *Plane) buildDenseStage(layerIdx int) (*stage, error) {
 }
 
 func (p *Plane) buildDirectBlock(span directSpan) (*directBlock, error) {
-	type irLowerable interface {
-		LowerDecodeModelIR(opts interface{}) (interface{}, error)
-	}
-	lowerable, ok := p.model.(irLowerable)
+	lowerable, ok := p.model.(models.DecodeModelIRLowerable)
 	if !ok {
 		return nil, fmt.Errorf("direct block: model %T does not implement LowerDecodeModelIR", p.model)
 	}
@@ -264,15 +261,7 @@ func (p *Plane) buildDirectBlock(span directSpan) (*directBlock, error) {
 	}
 	cosTable, sinTable := buildRoPETables(maxSeqLen, headDim, ropeTheta)
 
-	prog, err := lowerable.LowerDecodeModelIR(struct {
-		LayerOffset   int
-		MaxLayers     int
-		MaxSeqLen     int
-		IncludeLMHead bool
-		SkipFinalNorm bool
-		StatefulKV    bool
-		AttentionMask bool
-	}{
+	prog, err := lowerable.LowerDecodeModelIR(models.DecodeModelIROptions{
 		LayerOffset:   span.layerOffset,
 		MaxLayers:     len(span.layers),
 		MaxSeqLen:     maxSeqLen,

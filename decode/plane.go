@@ -36,10 +36,11 @@ type Plane struct {
 	moeProv       moeLayerProvider   // nil if model has no MoE layers
 	linearProv    linearLayerProvider // nil if model has no linear attention
 
-	mu         sync.RWMutex
-	disabled   bool
-	disableErr error
-	warnOnce   sync.Once
+	mu          sync.RWMutex
+	disabled    bool
+	disableErr  error
+	gpuFallback bool // run full decode loop on GPU through consumer interfaces
+	warnOnce    sync.Once
 
 	statsMu sync.Mutex
 	stats   Stats
@@ -153,6 +154,10 @@ var _ models.LanguageModel = (*Plane)(nil)
 //
 // The model must implement layerAttentionForwarder, layerWeightProvider,
 // headProvider, and embedder. MoE and linear attention interfaces are optional.
+//
+// When Mode is "gpu_fallback", the Plane runs the full decode loop on GPU
+// through the consumer interfaces without requiring the ANE runtime. This
+// verifies the integration path end-to-end.
 func Wrap(model models.LanguageModel, opts Options) (*Plane, error) {
 	if model == nil {
 		return nil, fmt.Errorf("ane decode plane: model is nil")
@@ -182,6 +187,41 @@ func Wrap(model models.LanguageModel, opts Options) (*Plane, error) {
 	moeProv, _ := model.(moeLayerProvider)
 	linearProv, _ := model.(linearLayerProvider)
 
+	gpuFallback := opts.Mode == "gpu_fallback"
+
+	plane := &Plane{
+		model:         model,
+		modelPath:     opts.ModelPath,
+		warn:          opts.Warn,
+		exp:           experimentConfigFromEnv(),
+		attnForwarder: attnFwd,
+		weightProv:    wp,
+		headProv:      hp,
+		embed:         emb,
+		moeProv:       moeProv,
+		linearProv:    linearProv,
+		stats:         Stats{Enabled: true},
+		inputNormF32:    make(map[int]*mlx.Array),
+		denseStages:     make(map[int]*stage),
+		denseErrs:       make(map[int]error),
+		densePending:    make(map[int]chan struct{}),
+		directBlocks:    make(map[int]*directBlock),
+		directErrs:      make(map[int]error),
+		directPending:   make(map[int]chan struct{}),
+		directFallbacks: make(map[int]directFallback),
+		sharedStages:    make(map[int]*stage),
+		sharedErrs:      make(map[int]error),
+		sharedPending:   make(map[int]chan struct{}),
+		expertStages:    make(map[stageKey]*stage),
+		expertErrs:      make(map[stageKey]error),
+		expertPending:   make(map[stageKey]chan struct{}),
+	}
+
+	if gpuFallback {
+		plane.gpuFallback = true
+		return plane, nil
+	}
+
 	cacheDir, err := resolveANEDecodeCacheDir(opts.CacheDir)
 	if err != nil {
 		return nil, err
@@ -200,43 +240,16 @@ func Wrap(model models.LanguageModel, opts Options) (*Plane, error) {
 	}
 	runtime.SetModelMirrorRoot(mirrorRoot)
 
+	plane.cacheRoot = cacheDir
+	plane.stageCacheDir = stageCacheDir
+	plane.mirrorRoot = mirrorRoot
+
 	directSpans := selectDirectBlockSpans(
 		cfg.NumLayers,
 		fullAttentionDenseOffsets(cfg.NumLayers, moeProv, linearProv),
 		os.Getenv("MLXGO_ANE_DIRECT_BLOCK_OFFSETS"),
 	)
-
-	plane := &Plane{
-		model:         model,
-		modelPath:     opts.ModelPath,
-		cacheRoot:     cacheDir,
-		stageCacheDir: stageCacheDir,
-		mirrorRoot:    mirrorRoot,
-		warn:          opts.Warn,
-		exp:           experimentConfigFromEnv(),
-		attnForwarder: attnFwd,
-		weightProv:    wp,
-		headProv:      hp,
-		embed:         emb,
-		moeProv:       moeProv,
-		linearProv:    linearProv,
-		stats:         Stats{Enabled: true},
-		inputNormF32:  make(map[int]*mlx.Array),
-		denseStages:   make(map[int]*stage),
-		denseErrs:     make(map[int]error),
-		densePending:  make(map[int]chan struct{}),
-		directBlocks:  make(map[int]*directBlock),
-		directErrs:    make(map[int]error),
-		directPending: make(map[int]chan struct{}),
-		directFallbacks: make(map[int]directFallback),
-		sharedStages:    make(map[int]*stage),
-		sharedErrs:      make(map[int]error),
-		sharedPending:   make(map[int]chan struct{}),
-		expertStages:    make(map[stageKey]*stage),
-		expertErrs:      make(map[stageKey]error),
-		expertPending:   make(map[stageKey]chan struct{}),
-		directSpans:     directSpans,
-	}
+	plane.directSpans = directSpans
 	plane.stats.OutputPoolDepth = plane.exp.PoolDepth
 	plane.stats.DirectBlockConfigured = len(directSpans)
 	plane.stats.DirectBlockConfiguredLayers = directSpanLayerCount(directSpans)
@@ -731,6 +744,23 @@ func (p *Plane) prewarm() error {
 // ---------------------------------------------------------------------------
 
 func (p *Plane) Forward(inputs *mlx.Array, cache kvcache.Cache) (*mlx.Array, kvcache.Cache, error) {
+	// When ANE is disabled (not gpu_fallback), delegate to the base model.
+	if p.isDisabled() && !p.gpuFallback {
+		return p.model.Forward(inputs, cache)
+	}
+	// Intercept single-token decode steps and route through the decode plane.
+	if inputs != nil && !inputs.IsNil() {
+		shape := inputs.Shape()
+		seqLen := 0
+		if len(shape) == 2 {
+			seqLen = shape[1]
+		} else if len(shape) == 1 {
+			seqLen = shape[0]
+		}
+		if seqLen == 1 && cache != nil {
+			return p.ForwardDecode(inputs, cache)
+		}
+	}
 	return p.model.Forward(inputs, cache)
 }
 

@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	mlxgoane "github.com/tmc/mlx-go-ane"
+	"github.com/tmc/mlx-go-ane/decode"
 	_ "github.com/tmc/mlx-go-ane/anedraftimpl"
 )
 
@@ -142,6 +144,17 @@ func (decodePlaneRuntime) SetModelMirrorRoot(cacheDir string) {
 
 // Available reports whether the ANE decode plane runtime is functional.
 func (decodePlaneRuntime) Available() bool { return true }
+
+// WrapModel wraps a LanguageModel with the ANE decode plane engine.
+// This is the method that anedecode.Wrap() type-asserts to via the registry.
+func (decodePlaneRuntime) WrapModel(model models.LanguageModel, mode, modelPath, cacheDir string, warn func(string, ...any)) (models.LanguageModel, error) {
+	return decode.Wrap(model, decode.Options{
+		Mode:      mode,
+		ModelPath: modelPath,
+		CacheDir:  cacheDir,
+		Warn:      warn,
+	})
+}
 
 func parseLinearRouteProfile(raw string) (mlxgoane.LinearRouteProfile, error) {
 	switch raw {
