@@ -1,11 +1,3 @@
-bench-note v1
-commit: 0f67c9f95266
-date: 2026-03-18T07:43:24Z
-go-version: go version go1.26.0 darwin/arm64
-benchtime: 1x
-count: 6
-exit-code: 0
--- raw.txt --
 loading model mlx-community/Qwen3.5-4B-4bit...
 2026/03/18 00:42:02 WARN ANE decode plane unavailable error="ane decode plane: runtime unavailable (register package not imported)"
 model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3.5-4B-4bit/snapshots/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c
