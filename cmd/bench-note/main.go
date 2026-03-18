@@ -53,7 +53,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: bench-note <command> [flags]
 
 Commands:
-  run [--benchtime=5x] [--count=6] [--from-file=FILE] [--append]
+  run [--benchtime=T] [--count=6] [--from-file=FILE] [--append]
       Run benchmarks and attach as git note to HEAD.
       --append concatenates to existing note instead of overwriting.
   show [commit]
@@ -70,7 +70,7 @@ Commands:
 
 func cmdRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	benchtime := fs.String("benchtime", "5x", "benchtime flag for go test")
+	benchtime := fs.String("benchtime", "", "benchtime flag for go test (omit for go test default)")
 	count := fs.Int("count", 6, "number of benchmark runs")
 	fromFile := fs.String("from-file", "", "use existing benchmark output file instead of running")
 	appendMode := fs.Bool("append", false, "append to existing note instead of overwriting")
@@ -193,9 +193,11 @@ func cmdHistory(_ []string) error {
 // runBenchmarks runs go test -bench and returns the output.
 func runBenchmarks(benchtime string, count int) ([]byte, error) {
 	args := []string{"test", "-bench=.", "-benchmem",
-		fmt.Sprintf("-benchtime=%s", benchtime),
 		fmt.Sprintf("-count=%d", count),
 		"-run=^$", "-timeout=30m",
+	}
+	if benchtime != "" {
+		args = append(args, fmt.Sprintf("-benchtime=%s", benchtime))
 	}
 	fmt.Fprintf(os.Stderr, "running: go %s\n", strings.Join(args, " "))
 	cmd := exec.Command("go", args...)
