@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,10 @@ import (
 //
 //	benchstat -col /mode results.txt
 //
+// Compare across models:
+//
+//	benchstat -col /model results.txt
+//
 // Filter to decode only:
 //
 //	benchstat -col /mode -filter ".name:Decode" results.txt
@@ -44,6 +49,7 @@ func BenchmarkInference(b *testing.B) {
 	}
 
 	maxTokens := GenerateTokens
+	modelTag := shortModelTag(modelID)
 
 	modes := []struct {
 		label   string
@@ -55,7 +61,7 @@ func BenchmarkInference(b *testing.B) {
 	}
 
 	for _, mode := range modes {
-		b.Run("mode="+mode.label, func(b *testing.B) {
+		b.Run("model="+modelTag+"/mode="+mode.label, func(b *testing.B) {
 			engine, err := newBenchEngine(modelID, mode.aneMode)
 			if err != nil {
 				b.Fatalf("setup %s: %v", mode.label, err)
@@ -261,4 +267,13 @@ func (e *benchEngine) generate(promptTokens []int32, maxTokens int) (GenerateRes
 		GenerateDuration: total,
 		TotalDuration:   total,
 	}, nil
+}
+
+// shortModelTag extracts a concise model tag from a HuggingFace model ID.
+// "mlx-community/Qwen2.5-Coder-0.5B-Instruct-4bit" → "Qwen2.5-Coder-0.5B-Instruct-4bit"
+func shortModelTag(modelID string) string {
+	if i := strings.LastIndex(modelID, "/"); i >= 0 {
+		return modelID[i+1:]
+	}
+	return modelID
 }
