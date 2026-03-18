@@ -1,4 +1,3 @@
--- 2026-03-18T08:08:38Z.txt --
 loading model mlx-community/Qwen2.5-0.5B-Instruct-4bit...
 2026/03/18 01:08:33 WARN ANE decode plane unavailable error="ane decode plane: runtime unavailable (register package not imported)"
 model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen2.5-0.5B-Instruct-4bit/snapshots/main
