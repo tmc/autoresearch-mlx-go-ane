@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -108,7 +109,7 @@ func cmdRun(args []string) error {
 	if *appendMode {
 		mode = "appended"
 	}
-	fmt.Fprintf(os.Stderr, "bench note %s to %s\n", mode, commit[:min(len(commit), 8)])
+	fmt.Printf("bench note %s to %s\n", mode, commit[:min(len(commit), 8)])
 	return nil
 }
 
@@ -199,7 +200,7 @@ func runBenchmarks(benchtime string, count int) ([]byte, error) {
 	fmt.Fprintf(os.Stderr, "running: go %s\n", strings.Join(args, " "))
 	cmd := exec.Command("go", args...)
 	var buf bytes.Buffer
-	cmd.Stdout = &buf
+	cmd.Stdout = io.MultiWriter(&buf, os.Stdout)
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
