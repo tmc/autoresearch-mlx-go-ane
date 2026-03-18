@@ -1,0 +1,97 @@
+bench-note v1
+commit: e40a26bd06e6
+date: 2026-03-18T08:10:58Z
+go-version: go version go1.26.0 darwin/arm64
+benchtime: 1x
+count: 6
+exit-code: 1
+-- raw.txt --
+loading model mlx-community/SmolLM2-135M-Instruct-4bit...
+Model mlx-community/SmolLM2-135M-Instruct-4bit not found in cache, downloading...
+setup engine: resolve model: failed to download model: failed to list files: API returned status 401
+exit status 1
+FAIL	github.com/tmc/mlx-go-ane	3.972s
+-- benchstat-vs-f8d24fc7.txt --
+goos: darwin
+goarch: arm64
+pkg: github.com/tmc/mlx-go-ane
+cpu: Apple M4 Max
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                  sec/op                                   │
+Inference/mode=GPU/Prefill-16                                                                  7.082m ± 162%
+Inference/mode=GPU/Decode-16                                                                   97.50m ±   0%
+Inference/mode=GPU/Generate-16                                                                 97.24m ±   1%
+Inference/mode=Plane/Prefill-16                                                                6.730m ±   4%
+Inference/mode=Plane/Decode-16                                                                 170.3m ±   1%
+Inference/mode=Plane/Generate-16                                                               170.1m ±   2%
+Generate-16                                                                                    96.93m ±   1%
+Prefill-16                                                                                     6.508m ±   3%
+geomean                                                                                        41.17m
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                prefill_ms                                 │
+Inference/mode=GPU/Prefill-16                                                                   6.500 ± 177%
+Inference/mode=GPU/Generate-16                                                                  6.000 ±   0%
+Inference/mode=Plane/Prefill-16                                                                 6.000 ±   0%
+Inference/mode=Plane/Generate-16                                                                6.000 ±   0%
+Generate-16                                                                                     6.365 ±  12%
+geomean                                                                                         6.169
+
+                                │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                │                               prompt_tok/s                                │
+Inference/mode=GPU/Prefill-16                                                                  1.290k ± 62%
+Inference/mode=Plane/Prefill-16                                                                1.351k ±  5%
+Prefill-16                                                                                     1.417k ±  3%
+geomean                                                                                        1.352k
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                   B/op                                    │
+Inference/mode=GPU/Prefill-16                                                                  387.6Ki ±  1%
+Inference/mode=GPU/Decode-16                                                                   711.7Ki ± 22%
+Inference/mode=GPU/Generate-16                                                                 726.0Ki ± 24%
+Inference/mode=Plane/Prefill-16                                                                391.3Ki ± 23%
+Inference/mode=Plane/Decode-16                                                                 971.5Ki ± 15%
+Inference/mode=Plane/Generate-16                                                              1002.3Ki ± 17%
+Generate-16                                                                                    997.6Ki ±  2%
+Prefill-16                                                                                     431.9Ki ± 19%
+geomean                                                                                        652.5Ki
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                 allocs/op                                 │
+Inference/mode=GPU/Prefill-16                                                                    10.09k ± 0%
+Inference/mode=GPU/Decode-16                                                                     18.15k ± 0%
+Inference/mode=GPU/Generate-16                                                                   18.15k ± 0%
+Inference/mode=Plane/Prefill-16                                                                  10.12k ± 0%
+Inference/mode=Plane/Decode-16                                                                   22.47k ± 5%
+Inference/mode=Plane/Generate-16                                                                 22.49k ± 0%
+Generate-16                                                                                      22.43k ± 0%
+Prefill-16                                                                                       10.84k ± 6%
+geomean                                                                                          15.93k
+
+                               │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                               │                               decode_tok/s                                │
+Inference/mode=GPU/Decode-16                                                                    549.8 ± 1%
+Inference/mode=Plane/Decode-16                                                                  306.0 ± 1%
+Generate-16                                                                                     553.0 ± 1%
+geomean                                                                                         453.1
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                  gen_ms                                   │
+Inference/mode=GPU/Generate-16                                                                    97.00 ± 1%
+Inference/mode=Plane/Generate-16                                                                  169.5 ± 2%
+Generate-16                                                                                       96.81 ± 1%
+geomean                                                                                           116.8
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                peak_mem_gb                                │
+Inference/mode=GPU/Generate-16                                                                   737.6m ± 4%
+Inference/mode=Plane/Generate-16                                                                  1.434 ± 2%
+Generate-16                                                                                       1.461 ± 0%
+geomean                                                                                           1.156
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-3037511068.txt │
+                                 │                                   tok/s                                   │
+Inference/mode=GPU/Generate-16                                                                    514.9 ± 1%
+Inference/mode=Plane/Generate-16                                                                  294.2 ± 2%
+Generate-16                                                                                       516.5 ± 1%
+geomean                                                                                           427.7
