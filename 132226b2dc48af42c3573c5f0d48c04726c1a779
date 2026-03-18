@@ -1,0 +1,146 @@
+bench-note v1
+commit: 132226b2dc48
+date: 2026-03-18T08:12:01Z
+go-version: go version go1.26.0 darwin/arm64
+benchtime: 1x
+count: 6
+exit-code: 0
+-- raw.txt --
+loading model mlx-community/Qwen3-0.6B-4bit...
+2026/03/18 01:11:58 WARN ANE decode plane unavailable error="ane decode plane: runtime unavailable (register package not imported)"
+model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3-0.6B-4bit/snapshots/main
+prompt tokens: 9
+warming up...
+ready
+goos: darwin
+goarch: arm64
+pkg: github.com/tmc/mlx-go-ane
+cpu: Apple M4 Max
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   9679958 ns/op	         9.000 prefill_ms	       938.9 prompt_tok/s	  463456 B/op	   12556 allocs/op
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   8902084 ns/op	         8.000 prefill_ms	      1019 prompt_tok/s	  379040 B/op	   12503 allocs/op
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   8206584 ns/op	         8.000 prefill_ms	      1106 prompt_tok/s	  454280 B/op	   12521 allocs/op
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   8362416 ns/op	         8.000 prefill_ms	      1086 prompt_tok/s	  466160 B/op	   12525 allocs/op
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   7484500 ns/op	         7.000 prefill_ms	      1216 prompt_tok/s	  466128 B/op	   12526 allocs/op
+BenchmarkInference/mode=GPU/Prefill-16 	       1	   7195958 ns/op	         7.000 prefill_ms	      1262 prompt_tok/s	  466160 B/op	   12525 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 107795625 ns/op	       496.3 decode_tok/s	  867920 B/op	   21950 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 103581709 ns/op	       515.4 decode_tok/s	  746336 B/op	   21940 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 103554000 ns/op	       515.8 decode_tok/s	  867816 B/op	   21966 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 103548500 ns/op	       516.4 decode_tok/s	  903696 B/op	   21971 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 103842292 ns/op	       514.7 decode_tok/s	  915472 B/op	   21977 allocs/op
+BenchmarkInference/mode=GPU/Decode-16  	       1	 104207458 ns/op	       512.6 decode_tok/s	  813208 B/op	   21945 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 104172750 ns/op	       104.0 gen_ms	         2.396 peak_mem_gb	         6.000 prefill_ms	       480.5 tok/s	  681096 B/op	   21917 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 104236083 ns/op	       104.0 gen_ms	         2.451 peak_mem_gb	         6.000 prefill_ms	       480.2 tok/s	  866216 B/op	   21957 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 103578625 ns/op	       103.0 gen_ms	         2.506 peak_mem_gb	         6.000 prefill_ms	       483.1 tok/s	  859224 B/op	   21956 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 103682000 ns/op	       103.0 gen_ms	         2.645 peak_mem_gb	         6.000 prefill_ms	       482.8 tok/s	  915088 B/op	   21974 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 104081708 ns/op	       103.0 gen_ms	         2.819 peak_mem_gb	         6.000 prefill_ms	       480.9 tok/s	  810128 B/op	   21936 allocs/op
+BenchmarkInference/mode=GPU/Generate-16         	       1	 104130375 ns/op	       104.0 gen_ms	         3.014 peak_mem_gb	         6.000 prefill_ms	       480.7 tok/s	  997928 B/op	   24121 allocs/op
+2026/03/18 01:12:00 WARN ANE decode plane unavailable error="ane decode plane: model *models.Qwen3Wrapper does not implement layerAttentionForwarder"
+2026/03/18 01:12:00 WARN ANE decode plane unavailable error="ane decode plane: model *models.Qwen3Wrapper does not implement layerAttentionForwarder"
+BenchmarkGenerate-16                            	       1	 117656458 ns/op	       509.2 decode_tok/s	       117.6 gen_ms	         3.143 peak_mem_gb	        19.38 prefill_ms	       425.3 tok/s	 1183800 B/op	   26902 allocs/op
+BenchmarkGenerate-16                            	       1	 105024083 ns/op	       509.5 decode_tok/s	       104.9 gen_ms	         3.563 peak_mem_gb	         6.759 prefill_ms	       476.7 tok/s	 1176672 B/op	   26907 allocs/op
+BenchmarkGenerate-16                            	       1	 103980000 ns/op	       513.8 decode_tok/s	       103.9 gen_ms	         3.663 peak_mem_gb	         6.534 prefill_ms	       481.4 tok/s	 1226248 B/op	   26937 allocs/op
+BenchmarkGenerate-16                            	       1	 103780125 ns/op	       514.8 decode_tok/s	       103.7 gen_ms	         3.791 peak_mem_gb	         6.532 prefill_ms	       482.3 tok/s	 1183672 B/op	   26917 allocs/op
+BenchmarkGenerate-16                            	       1	 103812292 ns/op	       514.6 decode_tok/s	       103.7 gen_ms	         3.863 peak_mem_gb	         6.554 prefill_ms	       482.1 tok/s	 1183696 B/op	   26918 allocs/op
+BenchmarkGenerate-16                            	       1	 104025667 ns/op	       513.7 decode_tok/s	       103.9 gen_ms	         3.964 peak_mem_gb	         6.557 prefill_ms	       481.3 tok/s	 1188424 B/op	   26920 allocs/op
+BenchmarkPrefill-16                             	       1	   6849333 ns/op	      1341 prompt_tok/s	  551024 B/op	   14087 allocs/op
+BenchmarkPrefill-16                             	       1	   6601834 ns/op	      1389 prompt_tok/s	  513296 B/op	   13370 allocs/op
+BenchmarkPrefill-16                             	       1	   6682416 ns/op	      1370 prompt_tok/s	  520208 B/op	   13371 allocs/op
+BenchmarkPrefill-16                             	       1	   6710125 ns/op	      1365 prompt_tok/s	  520264 B/op	   13371 allocs/op
+BenchmarkPrefill-16                             	       1	   6459542 ns/op	      1420 prompt_tok/s	  520208 B/op	   13371 allocs/op
+BenchmarkPrefill-16                             	       1	   6552958 ns/op	      1394 prompt_tok/s	  520208 B/op	   13371 allocs/op
+PASS
+ok  	github.com/tmc/mlx-go-ane	3.271s
+-- benchstat-vs-f8d24fc7.txt --
+goos: darwin
+goarch: arm64
+pkg: github.com/tmc/mlx-go-ane
+cpu: Apple M4 Max
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                                 sec/op                                  │                      sec/op                        vs base                │
+Inference/mode=GPU/Prefill-16                                                                7.082m ± 162%                                        8.284m ± 17%       ~ (p=0.310 n=6)
+Inference/mode=GPU/Decode-16                                                                 97.50m ±   0%                                       103.71m ±  4%  +6.37% (p=0.002 n=6)
+Inference/mode=GPU/Generate-16                                                               97.24m ±   1%                                       104.11m ±  1%  +7.06% (p=0.002 n=6)
+Inference/mode=Plane/Prefill-16                                                              6.730m ±   4%
+Inference/mode=Plane/Decode-16                                                               170.3m ±   1%
+Inference/mode=Plane/Generate-16                                                             170.1m ±   2%
+Generate-16                                                                                  96.93m ±   1%                                       104.00m ± 13%  +7.29% (p=0.002 n=6)
+Prefill-16                                                                                   6.508m ±   3%                                        6.642m ±  3%       ~ (p=0.065 n=6)
+geomean                                                                                      41.17m                                               36.16m        +7.84%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                               prefill_ms                                │                    prefill_ms                      vs base                │
+Inference/mode=GPU/Prefill-16                                                                 6.500 ± 177%                                        8.000 ±  12%       ~ (p=0.297 n=6)
+Inference/mode=GPU/Generate-16                                                                6.000 ±   0%                                        6.000 ±   0%       ~ (p=1.000 n=6) ¹
+Inference/mode=Plane/Prefill-16                                                               6.000 ±   0%
+Inference/mode=Plane/Generate-16                                                              6.000 ±   0%
+Generate-16                                                                                   6.365 ±  12%                                        6.556 ± 196%  +2.99% (p=0.041 n=6)
+geomean                                                                                       6.169                                               6.802         +8.23%               ²
+¹ all samples are equal
+² benchmark set differs from baseline; geomeans may not be comparable
+
+                                │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                │                              prompt_tok/s                               │                   prompt_tok/s                     vs base                │
+Inference/mode=GPU/Prefill-16                                                                1.290k ± 62%                                        1.096k ± 15%       ~ (p=0.310 n=6)
+Inference/mode=Plane/Prefill-16                                                              1.351k ±  5%
+Prefill-16                                                                                   1.417k ±  3%                                        1.379k ±  3%       ~ (p=0.084 n=6)
+geomean                                                                                      1.352k                                              1.230k        -9.09%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                                  B/op                                   │                       B/op                        vs base                 │
+Inference/mode=GPU/Prefill-16                                                                387.6Ki ±  1%                                      453.9Ki ± 18%        ~ (p=0.054 n=6)
+Inference/mode=GPU/Decode-16                                                                 711.7Ki ± 22%                                      847.5Ki ± 14%  +19.09% (p=0.004 n=6)
+Inference/mode=GPU/Generate-16                                                               726.0Ki ± 24%                                      842.5Ki ± 21%  +16.05% (p=0.041 n=6)
+Inference/mode=Plane/Prefill-16                                                              391.3Ki ± 23%
+Inference/mode=Plane/Decode-16                                                               971.5Ki ± 15%
+Inference/mode=Plane/Generate-16                                                            1002.3Ki ± 17%
+Generate-16                                                                                  997.6Ki ±  2%                                     1156.0Ki ±  4%  +15.88% (p=0.002 n=6)
+Prefill-16                                                                                   431.9Ki ± 19%                                      508.0Ki ±  6%  +17.62% (p=0.002 n=6)
+geomean                                                                                      652.5Ki                                            717.6Ki        +17.14%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                                allocs/op                                │                    allocs/op                      vs base                 │
+Inference/mode=GPU/Prefill-16                                                                  10.09k ± 0%                                       12.53k ±  0%  +24.08% (p=0.002 n=6)
+Inference/mode=GPU/Decode-16                                                                   18.15k ± 0%                                       21.96k ±  0%  +20.98% (p=0.002 n=6)
+Inference/mode=GPU/Generate-16                                                                 18.15k ± 0%                                       21.96k ± 10%  +20.95% (p=0.002 n=6)
+Inference/mode=Plane/Prefill-16                                                                10.12k ± 0%
+Inference/mode=Plane/Decode-16                                                                 22.47k ± 5%
+Inference/mode=Plane/Generate-16                                                               22.49k ± 0%
+Generate-16                                                                                    22.43k ± 0%                                       26.92k ±  0%  +20.02% (p=0.002 n=6)
+Prefill-16                                                                                     10.84k ± 6%                                       13.37k ±  5%  +23.33% (p=0.002 n=6)
+geomean                                                                                        15.93k                                            18.51k        +21.86%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                               │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                               │                              decode_tok/s                               │                   decode_tok/s                     vs base                │
+Inference/mode=GPU/Decode-16                                                                  549.8 ± 1%                                          515.0 ± 4%  -6.32% (p=0.002 n=6)
+Inference/mode=Plane/Decode-16                                                                306.0 ± 1%
+Generate-16                                                                                   553.0 ± 1%                                          513.8 ± 1%  -7.09% (p=0.002 n=6)
+geomean                                                                                       453.1                                               514.4       -6.71%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                                 gen_ms                                  │                      gen_ms                        vs base                │
+Inference/mode=GPU/Generate-16                                                                  97.00 ± 1%                                        103.50 ±  0%  +6.70% (p=0.002 n=6)
+Inference/mode=Plane/Generate-16                                                                169.5 ± 2%
+Generate-16                                                                                     96.81 ± 1%                                        103.90 ± 13%  +7.32% (p=0.002 n=6)
+geomean                                                                                         116.8                                              103.7        +7.01%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                               peak_mem_gb                               │                   peak_mem_gb                    vs base                  │
+Inference/mode=GPU/Generate-16                                                                 737.6m ± 4%                                     2575.5m ± 17%  +249.17% (p=0.002 n=6)
+Inference/mode=Plane/Generate-16                                                                1.434 ± 2%
+Generate-16                                                                                     1.461 ± 0%                                       3.727 ± 16%  +155.10% (p=0.002 n=6)
+geomean                                                                                         1.156                                            3.098        +198.45%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
+
+                                 │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-old-76647740.txt │ /var/folders/kj/qbc32fzd2pv6ngnsysy8vpmw0000gn/T/bench-new-4143268901.txt │
+                                 │                                  tok/s                                  │                       tok/s                        vs base                │
+Inference/mode=GPU/Generate-16                                                                  514.9 ± 1%                                         480.8 ±  0%  -6.61% (p=0.002 n=6)
+Inference/mode=Plane/Generate-16                                                                294.2 ± 2%
+Generate-16                                                                                     516.5 ± 1%                                         481.4 ± 12%  -6.81% (p=0.002 n=6)
+geomean                                                                                         427.7                                              481.1        -6.71%               ¹
+¹ benchmark set differs from baseline; geomeans may not be comparable
