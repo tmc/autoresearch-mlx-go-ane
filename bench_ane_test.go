@@ -50,7 +50,7 @@ func BenchmarkInference(b *testing.B) {
 		aneMode string
 	}{
 		{"GPU", "off"},
-		{"Plane", "gpu_fallback"},
+		{"ANE-GPU-fallback", "gpu_fallback"},
 		{"ANE", ANEDecodePlaneMode},
 	}
 
