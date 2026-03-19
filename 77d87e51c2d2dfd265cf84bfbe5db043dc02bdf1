@@ -1,0 +1,7 @@
+loading model mlx-community/Qwen3-1.7B-MLX-MXFP4...
+model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3-1.7B-MLX-MXFP4/snapshots/7f1f490fb453db576908ed8abdb7ee6bdb246889
+prompt tokens: 9
+warming up...
+MLX error: [quantized_matmul] Biases must be null for quantization mode 'mxfp4'. at /Users/tmc/ml-explore/mlx-go/mlxc/lib/build-mlx-c-darwin/mlx-c/mlx/c/ops.cpp:2563
+exit status 255
+FAIL	github.com/tmc/mlx-go-ane	0.629s
