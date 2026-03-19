@@ -133,8 +133,20 @@ func resolveModelPath(path string) (string, error) {
 	return "", fmt.Errorf("model path not found: %s", path)
 }
 
+// cacheMaker is implemented by models that provide custom per-layer cache types
+// (e.g., Qwen3.5 which mixes kvcache.Arrays for GatedDeltaNet linear attention
+// layers with standard Prealloc caches for full attention layers).
+type cacheMaker interface {
+	MakeCache() []models.Cache
+}
+
 // newCache creates a fresh KV cache for the engine's model.
+// Prefers the model's own MakeCache() when available to ensure each layer
+// gets the correct cache type.
 func (e *Engine) newCache() *models.MultiLayerCache {
+	if cm, ok := e.Model.(cacheMaker); ok {
+		return models.NewMultiLayerCacheFromList(cm.MakeCache())
+	}
 	numLayers := e.Model.Config().NumLayers
 	config := kvcache.DefaultConfig()
 	switch CacheType {
@@ -170,15 +182,18 @@ func (e *Engine) encodePrompt(prompt string) ([]int32, error) {
 	return e.Tokenizer.Encode(prompt)
 }
 
-// warmup runs a single-token forward pass to trigger any lazy compilation.
+// warmup runs multiple forward passes to fully prime Metal shaders and
+// allocation patterns before benchmarking begins.
 func (e *Engine) warmup() {
 	input, _ := mlx.Zeros([]int{1, 1}, mlx.Int32, nil)
 	cache := e.newCache()
-	out, _, err := e.Model.Forward(input, cache)
-	if err == nil {
-		mlx.Eval(out)
-		mlx.Synchronize(nil)
+	for i := 0; i < 5; i++ {
+		out, _, err := e.Model.Forward(input, cache)
+		if err == nil {
+			mlx.Eval(out)
+		}
 	}
+	mlx.Synchronize(nil)
 	input.Free()
 
 	if warmer, ok := e.Model.(anedecode.ANEDecodePlaneWarmer); ok {
@@ -189,6 +204,12 @@ func (e *Engine) warmup() {
 
 // generateN runs generation for maxTokens tokens and returns timing results.
 func (e *Engine) generateN(promptTokens []int32, maxTokens int) (GenerateResult, error) {
+	// Release accumulated Metal memory from prior iterations and ensure GPU
+	// is idle before timing starts. Without this, memory grows across
+	// benchmark iterations causing degradation in later runs.
+	mlx.ClearCache()
+	mlx.Synchronize(nil)
+
 	input, err := mlx.FromSlice(promptTokens, []int{1, len(promptTokens)}, mlx.Int32)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("create input array: %w", err)
