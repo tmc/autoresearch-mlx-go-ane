@@ -1,0 +1,60 @@
+loading model mlx-community/Qwen3-0.6B-4bit...
+model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3-0.6B-4bit/snapshots/main
+prompt tokens: 9
+warming up...
+ready
+goos: darwin
+goarch: arm64
+pkg: github.com/tmc/mlx-go-ane
+cpu: Apple M4 Max
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   8321900 ns/op	         6.000 prefill_ms	      1446 prompt_tok/s	   50043 B/op	    1038 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   6300900 ns/op	         6.000 prefill_ms	      1479 prompt_tok/s	   49563 B/op	    1031 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   6279767 ns/op	         5.000 prefill_ms	      1509 prompt_tok/s	   49100 B/op	    1031 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   6062217 ns/op	         5.000 prefill_ms	      1557 prompt_tok/s	   49100 B/op	    1031 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   6248442 ns/op	         5.000 prefill_ms	      1510 prompt_tok/s	   45816 B/op	    1030 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Prefill-16 	       5	   6151967 ns/op	         5.000 prefill_ms	      1528 prompt_tok/s	   49563 B/op	    1031 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 193472717 ns/op	       521.8 decode_tok/s	 1106692 B/op	   42855 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 213095358 ns/op	       457.8 decode_tok/s	 1058579 B/op	   42714 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 249312900 ns/op	       395.3 decode_tok/s	 1071136 B/op	   42715 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 249004458 ns/op	       441.7 decode_tok/s	 1073169 B/op	   42717 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 222583767 ns/op	       478.2 decode_tok/s	 1079766 B/op	   42718 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Decode-16  	       5	 213686283 ns/op	       491.5 decode_tok/s	 1075513 B/op	   42717 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 211041717 ns/op	       210.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       474.3 tok/s	 1075475 B/op	   42717 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 213597625 ns/op	       217.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       458.9 tok/s	 1075443 B/op	   42716 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 217645742 ns/op	       219.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       456.3 tok/s	 1106996 B/op	   43045 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 219275675 ns/op	       220.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       454.4 tok/s	 1158553 B/op	   43563 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 218424250 ns/op	       215.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       464.5 tok/s	 1136664 B/op	   43555 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=GPU/Generate-16         	       5	 221093808 ns/op	       223.0 gen_ms	         0.9233 peak_mem_gb	         7.000 prefill_ms	       448.0 tok/s	 1152707 B/op	   43559 allocs/op
+2026/03/19 01:44:28 WARN ANE decode plane unavailable error="ane decode plane: model *models.Qwen3Wrapper does not implement layerAttentionForwarder"
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   9345367 ns/op	         6.000 prefill_ms	      1415 prompt_tok/s	  146081 B/op	    2017 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   6607008 ns/op	         6.000 prefill_ms	      1464 prompt_tok/s	  130683 B/op	    1876 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   6554158 ns/op	         6.000 prefill_ms	      1422 prompt_tok/s	  130220 B/op	    1876 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   6634867 ns/op	         6.000 prefill_ms	      1418 prompt_tok/s	  110425 B/op	    1871 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   6628475 ns/op	         6.000 prefill_ms	      1425 prompt_tok/s	  130724 B/op	    1876 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Prefill-16          	       5	   6638925 ns/op	         6.000 prefill_ms	      1447 prompt_tok/s	  113310 B/op	    1872 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 195555717 ns/op	       526.3 decode_tok/s	 1161388 B/op	   43564 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 200168158 ns/op	       509.8 decode_tok/s	 1152262 B/op	   43559 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 207667575 ns/op	       490.9 decode_tok/s	 1135307 B/op	   43555 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 211835075 ns/op	       485.7 decode_tok/s	 1153054 B/op	   43559 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 212739050 ns/op	       493.3 decode_tok/s	 1161403 B/op	   43564 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Decode-16           	       5	 208244558 ns/op	       501.2 decode_tok/s	 1152316 B/op	   43560 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 236301608 ns/op	       260.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       383.8 tok/s	 1158556 B/op	   43563 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 301360267 ns/op	       304.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       328.8 tok/s	 1157057 B/op	   43562 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 276283983 ns/op	       224.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       444.8 tok/s	 1155124 B/op	   43561 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 212889700 ns/op	       212.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       471.4 tok/s	 1154062 B/op	   43558 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 229519375 ns/op	       231.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       431.8 tok/s	 1161331 B/op	   43564 allocs/op
+BenchmarkInference/model=Qwen3-0.6B-4bit/mode=ANE/Generate-16         	       5	 238344292 ns/op	       244.0 gen_ms	         1.233 peak_mem_gb	         6.000 prefill_ms	       409.2 tok/s	 1136816 B/op	   43557 allocs/op
+BenchmarkGenerate-16                                                  	       5	 262119808 ns/op	       360.8 decode_tok/s	       284.0 gen_ms	         1.233 peak_mem_gb	         6.797 prefill_ms	       352.1 tok/s	 1134857 B/op	   43555 allocs/op
+BenchmarkGenerate-16                                                  	       5	 242981325 ns/op	       424.0 decode_tok/s	       242.4 gen_ms	         1.233 peak_mem_gb	         6.528 prefill_ms	       412.6 tok/s	 1159424 B/op	   43563 allocs/op
+BenchmarkGenerate-16                                                  	       5	 226517792 ns/op	       426.1 decode_tok/s	       241.2 gen_ms	         1.233 peak_mem_gb	         6.496 prefill_ms	       414.6 tok/s	 1138617 B/op	   43556 allocs/op
+BenchmarkGenerate-16                                                  	       5	 233775883 ns/op	       429.6 decode_tok/s	       239.4 gen_ms	         1.233 peak_mem_gb	         6.648 prefill_ms	       417.6 tok/s	 1158518 B/op	   43563 allocs/op
+BenchmarkGenerate-16                                                  	       5	 240354025 ns/op	       416.2 decode_tok/s	       246.8 gen_ms	         1.233 peak_mem_gb	         6.532 prefill_ms	       405.2 tok/s	 1154153 B/op	   43560 allocs/op
+BenchmarkGenerate-16                                                  	       5	 243138717 ns/op	       423.0 decode_tok/s	       243.2 gen_ms	         1.233 peak_mem_gb	         6.784 prefill_ms	       411.2 tok/s	 1152697 B/op	   43560 allocs/op
+BenchmarkPrefill-16                                                   	       5	   6959492 ns/op	      1314 prompt_tok/s	  110868 B/op	    1871 allocs/op
+BenchmarkPrefill-16                                                   	       5	   6986208 ns/op	      1397 prompt_tok/s	  148670 B/op	    1880 allocs/op
+BenchmarkPrefill-16                                                   	       5	   6958375 ns/op	      1340 prompt_tok/s	  131219 B/op	    1877 allocs/op
+BenchmarkPrefill-16                                                   	       5	   7018200 ns/op	      1372 prompt_tok/s	  148628 B/op	    1880 allocs/op
+BenchmarkPrefill-16                                                   	       5	   6967083 ns/op	      1347 prompt_tok/s	  130179 B/op	    1875 allocs/op
+BenchmarkPrefill-16                                                   	       5	   7333650 ns/op	      1267 prompt_tok/s	  133158 B/op	    1877 allocs/op
+PASS
+ok  	github.com/tmc/mlx-go-ane	36.304s
