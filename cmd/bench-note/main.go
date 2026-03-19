@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	bench-note run [flags]       Run benchmarks and attach as git note to HEAD
+//	bench-note run [flags]       Run benchmarks and attach as git note to HEAD (or --commit)
 //	bench-note show [commit]     Display bench note (default: HEAD)
 //	bench-note compare [commit...] Run benchstat across commits (default: HEAD~1 HEAD)
 //	bench-note history           List commits that have bench notes
@@ -53,9 +53,10 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: bench-note <command> [flags]
 
 Commands:
-  run [--benchtime=T] [--count=6] [--from-file=FILE] [--append]
-      Run benchmarks and attach as git note to HEAD.
+  run [--benchtime=T] [--count=6] [--from-file=FILE] [--append] [--commit=SHA]
+      Run benchmarks and attach as git note to HEAD (or --commit).
       --append concatenates to existing note instead of overwriting.
+      --commit attaches to a specific commit instead of HEAD.
   show [commit]
       Display bench note (default: HEAD).
   compare [commit...] [-- benchstat-flags...]
@@ -74,9 +75,14 @@ func cmdRun(args []string) error {
 	count := fs.Int("count", 6, "number of benchmark runs")
 	fromFile := fs.String("from-file", "", "use existing benchmark output file instead of running")
 	appendMode := fs.Bool("append", false, "append to existing note instead of overwriting")
+	commitFlag := fs.String("commit", "", "attach note to this commit instead of HEAD")
 	fs.Parse(args)
 
-	commit, err := gitRevParse("HEAD")
+	ref := "HEAD"
+	if *commitFlag != "" {
+		ref = *commitFlag
+	}
+	commit, err := gitRevParse(ref)
 	if err != nil {
 		return err
 	}
@@ -163,7 +169,7 @@ func cmdCompare(args []string) error {
 		filenames = append(filenames, label+".txt")
 	}
 
-	cmdArgs := append(benchstatFlags, filenames...)
+	cmdArgs := append(filenames, benchstatFlags...)
 	cmd := exec.Command("benchstat", cmdArgs...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
