@@ -1,0 +1,33 @@
+loading model mlx-community/Qwen3.5-4B-4bit...
+2026/03/19 01:29:48 WARN ANE decode plane unavailable error="ane decode plane: runtime unavailable (register package not imported)"
+model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3.5-4B-4bit/snapshots/0e7ffd5c629ef7719d4cbc04069232580bfa9d9c
+prompt tokens: 23
+warming up...
+ready
+goos: darwin
+goarch: arm64
+pkg: github.com/tmc/mlx-go-ane
+cpu: Apple M4 Max
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  43507708 ns/op	        41.00 prefill_ms	       556.0 prompt_tok/s	   64268 B/op	    1528 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  40786342 ns/op	        41.00 prefill_ms	       556.4 prompt_tok/s	   63515 B/op	    1517 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  40836967 ns/op	        40.00 prefill_ms	       562.6 prompt_tok/s	   63443 B/op	    1516 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  41028875 ns/op	        41.00 prefill_ms	       559.9 prompt_tok/s	   34883 B/op	    1510 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  40907658 ns/op	        41.00 prefill_ms	       559.9 prompt_tok/s	   62449 B/op	    1515 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Prefill-16 	       5	  40875067 ns/op	        41.00 prefill_ms	       556.9 prompt_tok/s	   63443 B/op	    1516 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 737158933 ns/op	       150.2 decode_tok/s	 1241224 B/op	   58780 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 845848758 ns/op	        75.65 decode_tok/s	 1259624 B/op	   58652 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 715089892 ns/op	       148.5 decode_tok/s	 1205264 B/op	   58641 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 718414442 ns/op	       147.9 decode_tok/s	 1232908 B/op	   58646 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 731190033 ns/op	       142.0 decode_tok/s	 1204046 B/op	   58636 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Decode-16  	       5	 769847275 ns/op	       142.1 decode_tok/s	 1259548 B/op	   58651 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	1153931275 ns/op	      2820 gen_ms	        90.06 peak_mem_gb	        47.00 prefill_ms	        35.46 tok/s	 1205198 B/op	   58640 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	1312972108 ns/op	       723.0 gen_ms	       102.0 peak_mem_gb	        41.00 prefill_ms	       138.2 tok/s	 1232944 B/op	   58647 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	1162546042 ns/op	       923.0 gen_ms	       114.0 peak_mem_gb	        41.00 prefill_ms	       108.2 tok/s	 1232105 B/op	   58648 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	1895680133 ns/op	      3631 gen_ms	       125.9 peak_mem_gb	       133.0 prefill_ms	        27.54 tok/s	 1284134 B/op	   58654 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	2975546017 ns/op	      2920 gen_ms	       137.9 peak_mem_gb	        98.00 prefill_ms	        34.24 tok/s	 1233216 B/op	   58649 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=GPU/Generate-16         	       5	3338490933 ns/op	      3190 gen_ms	       149.8 peak_mem_gb	        95.00 prefill_ms	        31.34 tok/s	 1258732 B/op	   58652 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=ANE-GPU-fallback/Prefill-16         	       5	 178395042 ns/op	       145.0 prefill_ms	       158.6 prompt_tok/s	  104443 B/op	    1577 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=ANE-GPU-fallback/Prefill-16         	       5	 170882617 ns/op	       144.0 prefill_ms	       158.9 prompt_tok/s	   43180 B/op	    1568 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=ANE-GPU-fallback/Prefill-16         	       5	 135979008 ns/op	       169.0 prefill_ms	       135.4 prompt_tok/s	   73747 B/op	    1573 allocs/op
+BenchmarkInference/model=Qwen3.5-4B-4bit/mode=ANE-GPU-fallback/Prefill-16         	signal: killed
+FAIL	github.com/tmc/mlx-go-ane	93.057s
