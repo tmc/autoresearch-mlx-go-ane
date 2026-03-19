@@ -1,0 +1,42 @@
+loading model mlx-community/Qwen3-0.6B-4bit...
+model loaded from /Users/tmc/.cache/huggingface/hub/models--mlx-community--Qwen3-0.6B-4bit/snapshots/main
+prompt tokens: 9
+warming up...
+ready
+panic: runtime error: index out of range [1] with length 0
+
+goroutine 50 [running]:
+github.com/tmc/mlx-go-lm/mlxlm/models.(*Qwen3Model).forwardFromEmbeddingsWithContext(0x521afde62a0, 0x521afda2240, 0x521afe7e0c0, {0x10538df88, 0x521b13fc440})
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/models/qwen3.go:1021 +0x4cc
+github.com/tmc/mlx-go-lm/mlxlm/models.(*Qwen3Model).ForwardWithContext(0x521afde62a0, 0x521afda2240, 0x521afd24f00?, {0x10538df88, 0x521b13fc440})
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/models/qwen3.go:1014 +0x154
+github.com/tmc/mlx-go-lm/mlxlm/models.(*Qwen3Model).Forward(0x521afde62a0, 0x521aff3d620, {0x10538df88, 0x521b13fc440})
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/models/qwen3.go:990 +0x88
+github.com/tmc/mlx-go-lm/mlxlm/models.(*Qwen3LanguageModel).Forward(0x521afdb3040, 0x104a58820?, {0x10538df88?, 0x521b13fc440?}, 0x521b0727598?)
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/models/qwen3.go:1127 +0x2c
+github.com/tmc/mlx-go-lm/mlxlm/models.(*Qwen3Wrapper).Forward(0x521b07275b8?, 0x104c57454?, {0x10538df88, 0x521b13fc440})
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/models/qwen3.go:1323 +0x2c
+github.com/tmc/mlx-go-ane.(*benchEngine).generate.func1(0x521aff3d620?, {0x10538df88?, 0x521b13fc440?})
+	/Users/tmc/go/src/github.com/tmc/autoresearch-mlx-go-ane/bench_ane_test.go:229 +0x40
+github.com/tmc/mlx-go-lm/mlxlm/decode.(*TokenIterator).stepInner(0x521b04801c0, 0x521aff3d620, 0x0, 0xeb?)
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/decode/iterator.go:1102 +0x568
+github.com/tmc/mlx-go-lm/mlxlm/decode.(*TokenIterator).stepWithMode(0x104e01921?, 0x1c?, 0xb8?, 0x79?)
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/decode/iterator.go:711 +0x4c
+github.com/tmc/mlx-go-lm/mlxlm/decode.(*TokenIterator).prepare(0x521b04801c0, 0x105389748?)
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/decode/iterator.go:674 +0x28
+github.com/tmc/mlx-go-lm/mlxlm/decode.NewTokenIteratorWithCompileSupport({0x105389748, 0x10542fe80}, 0x521afca40d0, 0x0, 0x521aff3d620, {0x10538df88, _}, {0x0, 0x3ff0000000000000, 0x0, ...})
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/decode/iterator.go:477 +0x5a0
+github.com/tmc/mlx-go-lm/mlxlm/decode.NewTokenIterator(...)
+	/Users/tmc/go/src/github.com/tmc/mlx-go/examples/mlx-go-lm/mlxlm/decode/iterator.go:375
+github.com/tmc/mlx-go-ane.(*benchEngine).generate(0x521afdb35c0, {0x521b99cc400, 0x9, 0x10}, 0x1)
+	/Users/tmc/go/src/github.com/tmc/autoresearch-mlx-go-ane/bench_ane_test.go:245 +0x2e4
+github.com/tmc/mlx-go-ane.BenchmarkInference.func1.1(0x521b72b0908)
+	/Users/tmc/go/src/github.com/tmc/autoresearch-mlx-go-ane/bench_ane_test.go:83 +0xac
+testing.(*B).runN(0x521b72b0908, 0x1)
+	/Users/tmc/.local/homebrew/Cellar/go/1.26.0/libexec/src/testing/benchmark.go:219 +0x180
+testing.(*B).run1.func1()
+	/Users/tmc/.local/homebrew/Cellar/go/1.26.0/libexec/src/testing/benchmark.go:245 +0x48
+created by testing.(*B).run1 in goroutine 39
+	/Users/tmc/.local/homebrew/Cellar/go/1.26.0/libexec/src/testing/benchmark.go:238 +0x88
+exit status 2
+FAIL	github.com/tmc/mlx-go-ane	0.888s
