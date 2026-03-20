@@ -1,0 +1,1 @@
+BenchmarkTraining/model=Qwen3.5-4B-4bit/engine=Go/config=lora-16: 1.300 it/s, 301.0 tok/s
