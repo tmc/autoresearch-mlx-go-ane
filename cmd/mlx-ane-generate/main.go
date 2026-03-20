@@ -1,6 +1,6 @@
-// Command mlx-ane-generate wraps mlx-lm-generate with ANE acceleration.
+// Command mlx-ane-generate runs mlx-lm-generate with ANE acceleration.
 //
-// It passes through all mlx-lm-generate flags and adds ANE-specific flags
+// It provides the same flags as mlx-lm-generate plus ANE-specific flags
 // that control speculative decoding, decode-plane routing, and draft model
 // behavior on the Apple Neural Engine.
 package main
@@ -9,6 +9,8 @@ import (
 	"os"
 
 	"github.com/tmc/mlx-go-ane/internal/cmdwrap"
+	"github.com/tmc/mlx-go-lm/lmgenerate"
+	_ "github.com/tmc/mlx-go-ane/register"
 )
 
 var aneGenerateFlags = []cmdwrap.FlagSpec{
@@ -28,5 +30,18 @@ var aneGenerateFlags = []cmdwrap.FlagSpec{
 }
 
 func main() {
-	os.Exit(cmdwrap.RunWithFlags("cmd/mlx-lm-generate", os.Args[1:], aneGenerateFlags))
+	prepared, err := cmdwrap.Prepare(os.Args[1:], aneGenerateFlags)
+	if err != nil {
+		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
+		os.Exit(2)
+	}
+	if prepared.Help {
+		cmdwrap.PrintHelp(aneGenerateFlags)
+	}
+	if err := cmdwrap.ApplyEnv(prepared.Env); err != nil {
+		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
+		os.Exit(2)
+	}
+	os.Args = append([]string{"mlx-ane-generate"}, prepared.Args...)
+	lmgenerate.Main()
 }
