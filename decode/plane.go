@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	"github.com/tmc/mlx-go/mlx"
@@ -520,7 +520,7 @@ func (p *Plane) recordOutputWait(d time.Duration) {
 	p.statsMu.Unlock()
 }
 
-func (p *Plane) recordInitStats(init anehooks.InitStats) {
+func (p *Plane) recordInitStats(init offload.InitStats) {
 	if init.ArtifactCacheHit {
 		p.stats.ArtifactCacheHits++
 	} else {
@@ -555,7 +555,7 @@ func (p *Plane) recordStageBuild(kind stageKind, s *stage, dur time.Duration, er
 	}
 	if s != nil {
 		if primary := s.primarySlot(); primary != nil && primary.stage != nil {
-			if st, ok := primary.stage.(interface{ InitStats() anehooks.InitStats }); ok {
+			if st, ok := primary.stage.(interface{ InitStats() offload.InitStats }); ok {
 				p.recordInitStats(st.InitStats())
 			}
 		}
@@ -615,7 +615,7 @@ func (p *Plane) recordDirectBlockBuild(block *directBlock, dur time.Duration, er
 	}
 	if block != nil {
 		if primary := block.primarySlot(); primary != nil && primary.block != nil {
-			if st, ok := primary.block.(interface{ InitStats() anehooks.InitStats }); ok {
+			if st, ok := primary.block.(interface{ InitStats() offload.InitStats }); ok {
 				p.recordInitStats(st.InitStats())
 			}
 		}

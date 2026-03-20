@@ -2,7 +2,7 @@
 
 package anedraftimpl
 
-import anedraft "github.com/tmc/mlx-go-lm/anedraft"
+import anedraft "github.com/tmc/mlx-go-lm/draftbackend"
 
 type ANEDraftOptions = anedraft.Options
 type ANEDraftRuntimeStats = anedraft.RuntimeStats

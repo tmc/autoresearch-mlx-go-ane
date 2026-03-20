@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 )
 
@@ -16,12 +16,12 @@ import (
 // ---------------------------------------------------------------------------
 
 // runtimeStageBuilder is the local consumer interface for the registered
-// decode-plane runtime. The runtime is stored as any in anehooks; callers
+// decode-plane runtime. The runtime is stored as any in offload; callers
 // type-assert to this interface at the point of use.
 type runtimeStageBuilder interface {
 	SetModelMirrorRoot(cacheDir string)
 	NewQwen35Stage(dim, hidden int, cacheDir string, w1, w3, w2 []float32) (any, any, error)
-	NewQwen35DirectBlock(prog any, cfg anehooks.DirectBlockConfig) (any, any, error)
+	NewQwen35DirectBlock(prog any, cfg offload.DirectBlockConfig) (any, any, error)
 }
 
 // runtimeDirectBlock is the local consumer interface for a direct block
@@ -33,7 +33,7 @@ type runtimeDirectBlock interface {
 }
 
 func decodeRuntime() (runtimeStageBuilder, error) {
-	rt := anehooks.DecodePlaneRuntime()
+	rt := offload.DecodePlaneRuntime()
 	if rt == nil {
 		return nil, fmt.Errorf("ane decode plane runtime unavailable")
 	}
@@ -275,7 +275,7 @@ func (p *Plane) buildDirectBlock(span directSpan) (*directBlock, error) {
 	}
 
 	slotBuilder := func() (*directSlot, error) {
-		blockAny, bridgeAny, err := runtime.NewQwen35DirectBlock(prog, anehooks.DirectBlockConfig{
+		blockAny, bridgeAny, err := runtime.NewQwen35DirectBlock(prog, offload.DirectBlockConfig{
 			HiddenDim:      cfg.HiddenSize,
 			VocabSize:      cfg.VocabSize,
 			OutputDim:      cfg.HiddenSize,

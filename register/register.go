@@ -3,9 +3,10 @@
 package register
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	mlxgoane "github.com/tmc/mlx-go-ane"
 	"github.com/tmc/mlx-go-ane/decode"
@@ -13,16 +14,16 @@ import (
 )
 
 func init() {
-	anehooks.RegisterTrainingBackend(trainingBackend{})
-	anehooks.RegisterSpeculativeBackend(speculativeBackend{})
-	anehooks.RegisterDecodePlaneRuntime(decodePlaneRuntime{})
+	offload.RegisterTrainingBackend(trainingBackend{})
+	offload.RegisterSpeculativeBackend(speculativeBackend{})
+	offload.RegisterDecodePlaneRuntime(decodePlaneRuntime{})
 }
 
 // trainingBackend implements the SetupRouting method that
-// anehooks.SetupTrainingRouting type-asserts to.
+// offload.SetupTrainingRouting type-asserts to.
 type trainingBackend struct{}
 
-func (trainingBackend) SetupRouting(modeRaw, profileRaw string, allowFallback bool) (anehooks.TrainingRouting, error) {
+func (trainingBackend) SetupRouting(ctx context.Context, modeRaw, profileRaw string, allowFallback bool) (offload.TrainingRouting, error) {
 	profile, err := parseLinearRouteProfile(profileRaw)
 	if err != nil {
 		return nil, err
@@ -98,7 +99,7 @@ func (speculativeBackend) NewRuntime() (*speculativeRuntime, error) {
 
 // linearTelemetryProvider is the consumer-local interface for telemetry.
 type linearTelemetryProvider interface {
-	LastLinearTelemetry() anehooks.LinearTelemetry
+	LastLinearTelemetry() offload.LinearTelemetry
 	LinearCacheSize() int
 }
 
@@ -119,9 +120,9 @@ type linearTelemetryAdapter struct {
 	provider mlxgoane.LinearTelemetryProvider
 }
 
-func (a linearTelemetryAdapter) LastLinearTelemetry() anehooks.LinearTelemetry {
+func (a linearTelemetryAdapter) LastLinearTelemetry() offload.LinearTelemetry {
 	t := a.provider.LastLinearTelemetry()
-	return anehooks.LinearTelemetry{
+	return offload.LinearTelemetry{
 		CacheHit: t.CacheHit,
 		Build:    t.Build,
 		Compile:  t.Compile,
@@ -146,8 +147,8 @@ func (decodePlaneRuntime) SetModelMirrorRoot(cacheDir string) {
 func (decodePlaneRuntime) Available() bool { return true }
 
 // WrapModel wraps a LanguageModel with the ANE decode plane engine.
-// This is the method that anedecode.Wrap() type-asserts to via the registry.
-func (decodePlaneRuntime) WrapModel(model models.LanguageModel, mode, modelPath, cacheDir string, warn func(string, ...any)) (models.LanguageModel, error) {
+// This is the method that decodeplane.Wrap() type-asserts to via the registry.
+func (decodePlaneRuntime) WrapModel(ctx context.Context, model models.LanguageModel, mode, modelPath, cacheDir string, warn func(string, ...any)) (models.LanguageModel, error) {
 	return decode.Wrap(model, decode.Options{
 		Mode:      mode,
 		ModelPath: modelPath,

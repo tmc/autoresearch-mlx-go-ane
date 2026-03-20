@@ -10,11 +10,11 @@
 // Consumer interfaces are defined locally per Go idiom. There are two groups:
 //
 // Infrastructure interfaces (stage/block/bridge) are type-asserted from the
-// registered runtime backend (via exp/anehooks). These handle ANE evaluation,
+// registered runtime backend (via offload). These handle ANE evaluation,
 // synchronization, and GPU↔ANE data transfer.
 //
 // Model extraction interfaces are type-asserted from models.LanguageModel.
-// Models satisfy them via Go structural typing — no anehooks import needed
+// Models satisfy them via Go structural typing — no offload import needed
 // on the model side. The engine asserts each interface independently; a model
 // can implement a subset and the engine degrades gracefully.
 //

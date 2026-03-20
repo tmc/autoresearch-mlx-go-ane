@@ -17,7 +17,7 @@ import (
 	"github.com/tmc/mlx-go-lm/mlxlm/hfcache"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
-	"github.com/tmc/mlx-go-lm/mlxlm/runtime/anedecode"
+	"github.com/tmc/mlx-go-lm/mlxlm/runtime/decodeplane"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlx/random"
 )
@@ -85,7 +85,7 @@ func setupEngine(modelID string) (*Engine, error) {
 
 	// ANE decode plane wrapping.
 	if ANEDecodePlaneMode != "off" {
-		wrapped, err := anedecode.Wrap(model, anedecode.ANEDecodePlaneOptions{
+		wrapped, err := decodeplane.Wrap(context.Background(), model, decodeplane.DecodePlaneOptions{
 			Mode:      ANEDecodePlaneMode,
 			ModelPath: resolvedPath,
 			Warn: func(format string, args ...any) {
@@ -140,7 +140,7 @@ func (e *Engine) newCache() *models.MultiLayerCache {
 	switch CacheType {
 	case "inplace":
 		if mlx.HasKVCacheInplace() {
-			config.Type = kvcache.TypeInplace
+			config.Type = kvcache.TypePrealloc
 		}
 	case "rotating":
 		config.Type = kvcache.TypeRotating
@@ -181,8 +181,8 @@ func (e *Engine) warmup() {
 	}
 	input.Free()
 
-	if warmer, ok := e.Model.(anedecode.ANEDecodePlaneWarmer); ok {
-		warmer.PrewarmANEDecodePlane()
+	if warmer, ok := e.Model.(decodeplane.DecodePlaneWarmer); ok {
+		warmer.PrewarmDecodePlane()
 	}
 	mlx.ClearCache()
 }

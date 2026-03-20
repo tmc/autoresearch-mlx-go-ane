@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go/mlx"
 )
 
@@ -563,7 +563,7 @@ func (r *preparedRun) finishInput() {
 	r.inputCleanup = nil
 }
 
-func (r *preparedRun) start(ctx context.Context) <-chan anehooks.AsyncResult {
+func (r *preparedRun) start(ctx context.Context) <-chan offload.AsyncResult {
 	eval := r.slot.stage.(stageEvaluator)
 	return eval.EvalPreparedSurfaceAsync(ctx)
 }

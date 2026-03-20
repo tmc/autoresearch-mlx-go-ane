@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlx/fast"
@@ -583,7 +583,7 @@ func dispatchPreparedStages(ctx context.Context, packed *mlx.Array, stages []*st
 			}
 		}
 	} else {
-		evals := make([]<-chan anehooks.AsyncResult, len(runs))
+		evals := make([]<-chan offload.AsyncResult, len(runs))
 		for i, run := range runs {
 			evals[i] = run.start(ctx)
 		}

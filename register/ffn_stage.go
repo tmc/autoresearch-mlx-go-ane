@@ -9,7 +9,7 @@ import (
 	"unsafe"
 
 	mlxgoane "github.com/tmc/mlx-go-ane"
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/modelir"
 )
@@ -26,7 +26,7 @@ type ffnStage struct {
 	initDur  time.Duration
 }
 
-func (s *ffnStage) InputSurface() anehooks.InputSurface {
+func (s *ffnStage) InputSurface() offload.InputSurface {
 	return &ioSurfaceInput{surface: s.input}
 }
 
@@ -46,14 +46,14 @@ func (s *ffnStage) MapSeq() int {
 	return s.mapSeq
 }
 
-func (s *ffnStage) EvalPreparedSurfaceAsync(ctx context.Context) <-chan anehooks.AsyncResult {
-	ch := make(chan anehooks.AsyncResult, 1)
+func (s *ffnStage) EvalPreparedSurfaceAsync(ctx context.Context) <-chan offload.AsyncResult {
+	ch := make(chan offload.AsyncResult, 1)
 	go func() {
 		err := s.plan.Eval(ctx)
 		if err == nil {
 			err = compactOutput(s.output)
 		}
-		ch <- anehooks.AsyncResult{Err: err}
+		ch <- offload.AsyncResult{Err: err}
 	}()
 	return ch
 }
@@ -72,16 +72,16 @@ func (s *ffnStage) EvalPreparedSurface(ctx context.Context) error {
 // events. Input is written via CPU (GPU aliasing is disabled for planar
 // IOSurface layouts), so there is no Metal command buffer to signal from.
 // CPU-side SetSignaledValue does not reliably trigger ANE-side waits.
-func (s *ffnStage) WaitEvent() anehooks.Event { return nil }
+func (s *ffnStage) WaitEvent() offload.Event { return nil }
 
 // SignalEvent returns nil for the same reason as WaitEvent.
-func (s *ffnStage) SignalEvent() anehooks.Event { return nil }
+func (s *ffnStage) SignalEvent() offload.Event { return nil }
 
 func (s *ffnStage) WaitValue() uint64   { return 0 }
 func (s *ffnStage) SignalValue() uint64 { return 0 }
 
-func (s *ffnStage) InitStats() anehooks.InitStats {
-	return anehooks.InitStats{CompileLoad: s.initDur}
+func (s *ffnStage) InitStats() offload.InitStats {
+	return offload.InitStats{CompileLoad: s.initDur}
 }
 
 func (s *ffnStage) Close() {
@@ -93,7 +93,7 @@ func (s *ffnStage) Close() {
 	}
 }
 
-// ioSurfaceInput adapts IOSurfaceFloat32 to anehooks.InputSurface.
+// ioSurfaceInput adapts IOSurfaceFloat32 to offload.InputSurface.
 type ioSurfaceInput struct {
 	surface *mlxgoane.IOSurfaceFloat32
 }
@@ -219,19 +219,19 @@ func (b *directBlock) Close() {
 	}
 }
 
-func (b *directBlock) InitStats() anehooks.InitStats {
-	return anehooks.InitStats{}
+func (b *directBlock) InitStats() offload.InitStats {
+	return offload.InitStats{}
 }
 
-func (b *directBlock) InputSurface() anehooks.InputSurface {
+func (b *directBlock) InputSurface() offload.InputSurface {
 	return &ioSurfaceInput{surface: b.draft.InputSurface()}
 }
 
-func (b *directBlock) PosCosSurface() anehooks.InputSurface {
+func (b *directBlock) PosCosSurface() offload.InputSurface {
 	return &ioSurfaceInput{surface: b.draft.PosCosSurface()}
 }
 
-func (b *directBlock) PosSinSurface() anehooks.InputSurface {
+func (b *directBlock) PosSinSurface() offload.InputSurface {
 	return &ioSurfaceInput{surface: b.draft.PosSinSurface()}
 }
 
@@ -243,7 +243,7 @@ func (b *directBlock) EvalPreparedSurface(ctx context.Context) error {
 	return b.draft.EvalPreparedSurface(ctx)
 }
 
-func (b *directBlock) WaitEvent() anehooks.Event {
+func (b *directBlock) WaitEvent() offload.Event {
 	ev := b.draft.WaitEvent()
 	if ev == nil {
 		return nil
@@ -251,7 +251,7 @@ func (b *directBlock) WaitEvent() anehooks.Event {
 	return ev
 }
 
-func (b *directBlock) SignalEvent() anehooks.Event {
+func (b *directBlock) SignalEvent() offload.Event {
 	ev := b.draft.SignalEvent()
 	if ev == nil {
 		return nil
@@ -421,7 +421,7 @@ func (decodePlaneRuntime) NewQwen35Stage(dim, hidden int, cacheDir string, w1, w
 	return stage, &ffnBridge{bridge: bridge}, nil
 }
 
-func (decodePlaneRuntime) NewQwen35DirectBlock(prog any, cfg anehooks.DirectBlockConfig) (any, any, error) {
+func (decodePlaneRuntime) NewQwen35DirectBlock(prog any, cfg offload.DirectBlockConfig) (any, any, error) {
 	modelProg, ok := prog.(*modelir.Program)
 	if !ok {
 		return nil, nil, fmt.Errorf("ane direct block: expected *modelir.Program, got %T", prog)

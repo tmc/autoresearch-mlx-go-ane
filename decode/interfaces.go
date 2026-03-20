@@ -5,7 +5,7 @@ package decode
 import (
 	"context"
 
-	"github.com/tmc/mlx-go-lm/exp/anehooks"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go/mlx"
 )
@@ -16,20 +16,20 @@ import (
 
 // stageEvaluator is the core eval loop interface for a stage.
 type stageEvaluator interface {
-	InputSurface() anehooks.InputSurface
+	InputSurface() offload.InputSurface
 	InputShape() []int
 	OutputSurface() any // concrete type known to bridge, not leaked here
 	ModelDim() int
 	MapSeq() int
-	EvalPreparedSurfaceAsync(context.Context) <-chan anehooks.AsyncResult
+	EvalPreparedSurfaceAsync(context.Context) <-chan offload.AsyncResult
 }
 
 // synchronizer provides event-based sync for stages and direct blocks.
 // Used at setup-time wiring (cross-stage signaling) and output
 // materialization, not just eval. Stages and blocks both satisfy this.
 type synchronizer interface {
-	WaitEvent() anehooks.Event
-	SignalEvent() anehooks.Event
+	WaitEvent() offload.Event
+	SignalEvent() offload.Event
 	WaitValue() uint64
 	SignalValue() uint64
 }
@@ -40,9 +40,9 @@ type synchronizer interface {
 
 // blockEvaluator is the core eval interface for a direct block.
 type blockEvaluator interface {
-	InputSurface() anehooks.InputSurface
-	PosCosSurface() anehooks.InputSurface
-	PosSinSurface() anehooks.InputSurface
+	InputSurface() offload.InputSurface
+	PosCosSurface() offload.InputSurface
+	PosSinSurface() offload.InputSurface
 	OutputSurface() any // concrete type known to bridge
 	EvalPreparedSurface(context.Context) error
 }
@@ -123,7 +123,7 @@ type bridgeAdder interface {
 // Model extraction interfaces (consumer-defined, no shared types needed)
 //
 // The decode engine type-asserts models.LanguageModel to these interfaces.
-// Models satisfy them via Go structural typing — no anehooks import needed
+// Models satisfy them via Go structural typing — no offload import needed
 // on the model side. Each interface is asserted independently; a model can
 // implement a subset and the engine degrades gracefully.
 // ---------------------------------------------------------------------------

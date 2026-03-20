@@ -3,7 +3,9 @@
 package anedraftimpl
 
 import (
-	anedraft "github.com/tmc/mlx-go-lm/anedraft"
+	"context"
+
+	anedraft "github.com/tmc/mlx-go-lm/draftbackend"
 	"github.com/tmc/mlx-go-lm/mlxlm/decode"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 )
@@ -14,11 +16,11 @@ func init() {
 
 type backend struct{}
 
-func (backend) NewDrafter(modelcPath string, draftModel models.LanguageModel, options anedraft.Options) (decode.Drafter, func(), error) {
+func (backend) NewDrafter(_ context.Context, modelcPath string, draftModel models.LanguageModel, options anedraft.Options) (decode.Drafter, func(), error) {
 	return NewANEDrafter(modelcPath, draftModel, ANEDraftOptions(options))
 }
 
-func (backend) WrapSSDDrafter(d decode.Drafter) (decode.Drafter, error) {
+func (backend) WrapSSDDrafter(_ context.Context, d decode.Drafter) (decode.Drafter, error) {
 	return NewANESSDDrafterAdapter(d)
 }
 
