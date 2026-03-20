@@ -186,8 +186,8 @@ func BenchmarkTraining(b *testing.B) {
 		"-iters", iters,
 		"-batch-size", batchSize,
 		"-steps-per-report", iters, // report at end
-		"-steps-per-eval", "0",     // skip validation during timed run
-		"-save-every", "0",         // don't save adapters
+		"-steps-per-eval", "999999",     // skip validation during timed run
+		"-save-every", "999999",         // don't save adapters
 		"-num-layers", "4",
 		"-max-seq-length", "512",
 		"-seed", "42",
