@@ -48,7 +48,7 @@ func RunWithFlags(target string, args []string, specs []FlagSpec) int {
 	if prepared.Help && len(specs) > 0 {
 		PrintHelp(specs)
 	}
-	goArgs := []string{"run", "-tags", "ane_appleneuralengine", "./" + target}
+	goArgs := []string{"run", "-tags", "./" + target}
 	goArgs = append(goArgs, prepared.Args...)
 	cmd := exec.Command("go", goArgs...)
 	cmd.Dir = root

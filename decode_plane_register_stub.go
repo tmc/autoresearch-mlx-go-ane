@@ -1,3 +1,3 @@
-//go:build !darwin || !ane_appleneuralengine
+//go:build !darwin
 
 package mlxgoane

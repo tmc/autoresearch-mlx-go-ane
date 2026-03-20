@@ -1,4 +1,4 @@
-//go:build darwin && ane_appleneuralengine && !ane_bridge
+//go:build darwin && !ane_bridge
 
 package mlxgoane
 

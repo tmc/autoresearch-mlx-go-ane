@@ -1,4 +1,4 @@
-//go:build darwin && ane_appleneuralengine && cgo
+//go:build darwin && cgo
 
 package mlxgoane
 
