@@ -1,13 +1,13 @@
-// Package training benchmarks mlx-lm-train vs mlx-ane-train across
-// fine-tuning configurations and ANE routing profiles.
+// Package training benchmarks stable and exploratory mlx-lm-train vs
+// mlx-ane-train comparisons.
 //
-// Run default configs (LoRA, GPU vs ANE):
+// Run release comparisons:
 //
 //	go test -bench=BenchmarkTraining -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/training
 //
-// Full matrix (all ANE routing profiles):
+// Run exploratory routing configs:
 //
-//	go test -bench=BenchmarkTraining -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/training -args -configs=all
+//	go test -bench=BenchmarkTrainingExplore -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/training
 //
 // Compare GPU vs ANE with benchstat:
 //
@@ -31,9 +31,25 @@ import (
 	"time"
 )
 
-var benchModel = flag.String("model", "", "model ID (default: MLX_BENCH_MODEL or mlx-community/Qwen3.5-4B-4bit)")
+var benchModel = flag.String("model", "", "single model ID override (default: MLX_BENCH_MODEL or stable model set)")
+var benchModels = flag.String("models", "", "comma-separated model IDs (default: MLX_BENCH_MODELS or stable Qwen3/Qwen3.5 pair)")
 var benchData = flag.String("data", "", "training data directory (default: MLX_BENCH_DATA or bundled data)")
 var benchConfigs = flag.String("configs", "", "configs to benchmark: all, or comma-separated list")
+
+var defaultBenchModels = []string{
+	"mlx-community/Qwen3-0.6B-4bit",
+	"mlx-community/Qwen3.5-0.8B-4bit",
+}
+
+var trainingExploreConfigLabels = []string{
+	"dora",
+	"full",
+	"lora+forward-all",
+	"lora+route-balanced",
+	"lora+route-conservative",
+	"lora+route-aggressive",
+	"lora+fallback",
+}
 
 // Training output format (verbose):
 //
@@ -90,6 +106,20 @@ func parseTrainStats(output []byte) (trainStats, error) {
 	return s, nil
 }
 
+func benchmarkSkippableError(output []byte) string {
+	text := string(output)
+	switch {
+	case strings.Contains(text, "full fine-tuning not supported on quantized models"):
+		return "full fine-tuning is unsupported for quantized benchmark models"
+	case strings.Contains(text, "failed to create adapter set: baseWeight shape"):
+		return "adapter layout is incompatible with this benchmark model"
+	case strings.Contains(text, "failed to create adapter set: baseWeight is required for DoRA initialization"):
+		return "DoRA adapters are unsupported for this benchmark model"
+	default:
+		return ""
+	}
+}
+
 func runTrainCLI(t testing.TB, cmd string, args []string) (trainStats, error) {
 	t.Helper()
 	if testing.Verbose() {
@@ -97,6 +127,9 @@ func runTrainCLI(t testing.TB, cmd string, args []string) (trainStats, error) {
 	}
 	out, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
+		if reason := benchmarkSkippableError(out); reason != "" {
+			t.Skipf("%s: %s", cmd, reason)
+		}
 		return trainStats{}, fmt.Errorf("%s: %w\n%s", cmd, err, out)
 	}
 	if testing.Verbose() {
@@ -126,6 +159,34 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+func csvList(raw string) []string {
+	var out []string
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func resolveBenchModels() []string {
+	switch {
+	case *benchModels != "":
+		return csvList(*benchModels)
+	case *benchModel != "":
+		return []string{*benchModel}
+	}
+	if raw := envOr("MLX_BENCH_MODELS", ""); raw != "" {
+		return csvList(raw)
+	}
+	if model := envOr("MLX_BENCH_MODEL", ""); model != "" {
+		return []string{model}
+	}
+	return append([]string(nil), defaultBenchModels...)
+}
+
 // findDefaultData locates the bundled training data in the mlx-go-lm repo.
 // Prefers the 20-sample dataset over the 1-sample smoke test data.
 func findDefaultData() string {
@@ -152,17 +213,18 @@ type runConfig struct {
 	extra bool
 }
 
-// BenchmarkTraining compares mlx-lm-train (GPU) vs mlx-ane-train (ANE)
-// across fine-tuning types and ANE routing configurations.
-//
-// Default configs run LoRA fine-tuning for both engines. Use -configs=all
-// or MLX_BENCH_CONFIGS to expand the matrix to include DoRA, full
-// fine-tuning, and ANE routing profiles.
+// BenchmarkTraining runs the stable release comparison set.
 func BenchmarkTraining(b *testing.B) {
-	model := *benchModel
-	if model == "" {
-		model = envOr("MLX_BENCH_MODEL", "mlx-community/Qwen3.5-4B-4bit")
-	}
+	benchmarkTraining(b, false)
+}
+
+// BenchmarkTrainingExplore runs the wider exploratory configuration set.
+func BenchmarkTrainingExplore(b *testing.B) {
+	benchmarkTraining(b, true)
+}
+
+func benchmarkTraining(b *testing.B, includeExplore bool) {
+	models := resolveBenchModels()
 	data := *benchData
 	if data == "" {
 		data = envOr("MLX_BENCH_DATA", "")
@@ -176,113 +238,16 @@ func BenchmarkTraining(b *testing.B) {
 
 	iters := envOr("MLX_BENCH_TRAIN_ITERS", "20")
 	batchSize := envOr("MLX_BENCH_BATCH_SIZE", "1")
-	modelName := shortModelName(model)
 
-	// Small, fast training runs for benchmarking throughput.
-	goBase := []string{
-		"-model", model,
-		"-data", data,
-		"-train",
-		"-iters", iters,
-		"-batch-size", batchSize,
-		"-steps-per-report", iters, // report at end
-		"-steps-per-eval", "999999",     // skip validation during timed run
-		"-save-every", "999999",         // don't save adapters
-		"-num-layers", "4",
-		"-max-seq-length", "512",
-		"-seed", "42",
-	}
-	aneBase := append([]string{}, goBase...)
-
-	configs := []runConfig{
-		// Default: LoRA, GPU vs ANE
-		{
-			name: "engine=Go/config=lora",
-			cmd:  "mlx-lm-train",
-			args: append(append([]string{}, goBase...), "-fine-tune-type", "lora"),
-		},
-		{
-			name: "engine=ANE/config=lora",
-			cmd:  "mlx-ane-train",
-			args: append(append([]string{}, aneBase...), "-fine-tune-type", "lora"),
-		},
-
-		// DoRA
-		{
-			name:  "engine=Go/config=dora",
-			cmd:   "mlx-lm-train",
-			args:  append(append([]string{}, goBase...), "-fine-tune-type", "dora"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=dora",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "dora"),
-			extra: true,
-		},
-
-		// Full fine-tuning
-		{
-			name:  "engine=Go/config=full",
-			cmd:   "mlx-lm-train",
-			args:  append(append([]string{}, goBase...), "-fine-tune-type", "full"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=full",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "full"),
-			extra: true,
-		},
-
-		// ANE routing profiles (LoRA)
-		{
-			name:  "engine=ANE/config=lora+forward-all",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=lora+route-balanced",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "balanced"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=lora+route-conservative",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "conservative"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=lora+route-aggressive",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "aggressive"),
-			extra: true,
-		},
-
-		// ANE with fallback
-		{
-			name:  "engine=ANE/config=lora+fallback",
-			cmd:   "mlx-ane-train",
-			args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-allow-fallback"),
-			extra: true,
-		},
-	}
-
-	// Resolve which extra configs to include.
+	// Resolve which exploratory configs to include.
 	raw := *benchConfigs
 	if raw == "" {
 		raw = envOr("MLX_BENCH_CONFIGS", "")
 	}
 	want := make(map[string]bool)
 	if raw == "all" {
-		for _, c := range configs {
-			if c.extra {
-				if i := strings.LastIndex(c.name, "config="); i >= 0 {
-					want[c.name[i+len("config="):]] = true
-				}
-			}
+		for _, label := range trainingExploreConfigLabels {
+			want[label] = true
 		}
 	} else if raw != "" {
 		for _, s := range strings.Split(raw, ",") {
@@ -290,41 +255,134 @@ func BenchmarkTraining(b *testing.B) {
 		}
 	}
 
-	for _, cfg := range configs {
-		if cfg.extra {
-			configName := cfg.name
-			if i := strings.LastIndex(configName, "config="); i >= 0 {
-				configName = configName[i+len("config="):]
-			}
-			if !want[configName] {
+	for _, model := range models {
+		modelName := shortModelName(model)
+
+		goBase := []string{
+			"-model", model,
+			"-data", data,
+			"-train",
+			"-iters", iters,
+			"-batch-size", batchSize,
+			"-steps-per-report", iters,
+			"-steps-per-eval", "999999",
+			"-save-every", "999999",
+			"-num-layers", "4",
+			"-max-seq-length", "512",
+			"-seed", "42",
+		}
+		aneBase := append([]string{}, goBase...)
+
+		configs := []runConfig{
+			{
+				name: "engine=Go/config=lora",
+				cmd:  "mlx-lm-train",
+				args: append(append([]string{}, goBase...), "-fine-tune-type", "lora"),
+			},
+			{
+				name: "engine=ANE/config=lora",
+				cmd:  "mlx-ane-train",
+				args: append(append([]string{}, aneBase...), "-fine-tune-type", "lora"),
+			},
+			{
+				name:  "engine=Go/config=dora",
+				cmd:   "mlx-lm-train",
+				args:  append(append([]string{}, goBase...), "-fine-tune-type", "dora"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=dora",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "dora"),
+				extra: true,
+			},
+			{
+				name:  "engine=Go/config=full",
+				cmd:   "mlx-lm-train",
+				args:  append(append([]string{}, goBase...), "-fine-tune-type", "full"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=full",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "full"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=lora+forward-all",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=lora+route-balanced",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "balanced"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=lora+route-conservative",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "conservative"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=lora+route-aggressive",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-route-profile", "aggressive"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=lora+fallback",
+				cmd:   "mlx-ane-train",
+				args:  append(append([]string{}, aneBase...), "-fine-tune-type", "lora", "--ane-forward", "all", "--ane-allow-fallback"),
+				extra: true,
+			},
+		}
+
+		for _, cfg := range configs {
+			if cfg.extra != includeExplore {
 				continue
 			}
-		}
-
-		prefix := "model=" + modelName + "/" + cfg.name
-		if _, err := exec.LookPath(cfg.cmd); err != nil {
-			b.Run(prefix, func(b *testing.B) { b.Skipf("%s not found in PATH", cfg.cmd) })
-			continue
-		}
-
-		b.Run(prefix, func(b *testing.B) {
-			for b.Loop() {
-				time.Sleep(time.Second) // settle between runs
-				b.ResetTimer()
-				s, err := runTrainCLI(b, cfg.cmd, cfg.args)
-				if err != nil {
-					b.Fatal(err)
-				}
-				b.ReportMetric(s.tokPerSec, "tok/s")
-				b.ReportMetric(s.itPerSec, "it/s")
-				b.ReportMetric(s.lastLoss, "loss")
-				if s.peakMemGB > 0 {
-					b.ReportMetric(s.peakMemGB, "peak-GB")
-				}
-				if s.valLoss > 0 {
-					b.ReportMetric(s.valLoss, "val-loss")
+			if includeExplore && len(want) > 0 {
+				configName := configLabel(cfg.name)
+				if !want[configName] {
+					continue
 				}
 			}
-		})
+
+			prefix := "model=" + modelName + "/" + cfg.name
+			if _, err := exec.LookPath(cfg.cmd); err != nil {
+				b.Run(prefix, func(b *testing.B) { b.Skipf("%s not found in PATH", cfg.cmd) })
+				continue
+			}
+
+			b.Run(prefix, func(b *testing.B) {
+				for b.Loop() {
+					time.Sleep(time.Second)
+					b.ResetTimer()
+					s, err := runTrainCLI(b, cfg.cmd, cfg.args)
+					if err != nil {
+						b.Fatal(err)
+					}
+					b.ReportMetric(s.tokPerSec, "tok/s")
+					b.ReportMetric(s.itPerSec, "it/s")
+					b.ReportMetric(s.lastLoss, "loss")
+					if s.peakMemGB > 0 {
+						b.ReportMetric(s.peakMemGB, "peak-GB")
+					}
+					if s.valLoss > 0 {
+						b.ReportMetric(s.valLoss, "val-loss")
+					}
+				}
+			})
+		}
 	}
+}
+
+func configLabel(name string) string {
+	if i := strings.LastIndex(name, "config="); i >= 0 {
+		return name[i+len("config="):]
+	}
+	return name
 }

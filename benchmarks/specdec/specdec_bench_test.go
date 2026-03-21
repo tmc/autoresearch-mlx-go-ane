@@ -1,13 +1,13 @@
-// Package specdec benchmarks mlx-lm-generate vs mlx-ane-generate across
-// standard and speculative decoding configurations.
+// Package specdec benchmarks stable and exploratory mlx-lm-generate vs
+// mlx-ane-generate comparisons.
 //
-// Run default configs (standard decode, GPU vs ANE):
+// Run release comparisons:
 //
 //	go test -bench=BenchmarkSpecDec -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/specdec
 //
-// Full matrix (all specdec + ANE configs):
+// Run exploratory generation configs:
 //
-//	go test -bench=BenchmarkSpecDec -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/specdec -args -configs=all
+//	go test -bench=BenchmarkSpecDecExplore -benchtime=1x -count=4 -run=^$ -timeout=30m ./benchmarks/specdec
 //
 // Compare GPU vs ANE with benchstat:
 //
@@ -31,9 +31,28 @@ import (
 	"time"
 )
 
-var benchModel = flag.String("model", "", "model ID (default: MLX_BENCH_MODEL or mlx-community/Qwen3.5-4B-4bit)")
+var benchModel = flag.String("model", "", "single model ID override (default: MLX_BENCH_MODEL or stable model set)")
+var benchModels = flag.String("models", "", "comma-separated model IDs (default: MLX_BENCH_MODELS or stable Qwen3/Qwen3.5 pair)")
 var benchDraftModel = flag.String("draft-model", "", "draft model for specdec (default: MLX_BENCH_DRAFT_MODEL)")
 var benchConfigs = flag.String("configs", "", "configs to benchmark: all, or comma-separated list")
+
+var defaultBenchModels = []string{
+	"mlx-community/Qwen3-0.6B-4bit",
+	"mlx-community/Qwen3.5-0.8B-4bit",
+}
+
+var specdecExploreConfigLabels = []string{
+	"decode-plane",
+	"ane-forward-prefill",
+	"ane-forward-all",
+	"spec-standard",
+	"spec-ssd",
+	"spec-ssd+decode-plane",
+	"spec-ssd+ane-speculative",
+	"spec-ssd+ane-draft",
+	"mtp",
+	"mtp+decode-plane",
+}
 
 var cliStatsRe = regexp.MustCompile(`(?m)^(Prefill|Generation):\s+(\d+)\s+tokens,\s+([\d.]+)\s+tokens-per-sec`)
 var peakMemRe = regexp.MustCompile(`(?m)^Peak memory:\s+([\d.]+)\s+GB`)
@@ -75,6 +94,20 @@ func parseCLIStats(output []byte) (cliStats, error) {
 	return s, nil
 }
 
+func benchmarkSkippableError(output []byte) string {
+	text := string(output)
+	switch {
+	case strings.Contains(text, "does not have native mtp weights"):
+		return "model does not expose native mtp weights"
+	case strings.Contains(text, "does not expose hidden states"):
+		return "model does not expose hidden states required for MTP"
+	case strings.Contains(text, "flag provided but not defined: -ane-preset"):
+		return "installed mlx-ane-generate does not support --ane-preset"
+	default:
+		return ""
+	}
+}
+
 func runCLI(t testing.TB, cmd string, args []string) (cliStats, error) {
 	t.Helper()
 	if testing.Verbose() {
@@ -82,6 +115,9 @@ func runCLI(t testing.TB, cmd string, args []string) (cliStats, error) {
 	}
 	out, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
+		if reason := benchmarkSkippableError(out); reason != "" {
+			t.Skipf("%s: %s", cmd, reason)
+		}
 		return cliStats{}, fmt.Errorf("%s: %w\n%s", cmd, err, out)
 	}
 	if testing.Verbose() {
@@ -111,6 +147,34 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+func csvList(raw string) []string {
+	var out []string
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func resolveBenchModels() []string {
+	switch {
+	case *benchModels != "":
+		return csvList(*benchModels)
+	case *benchModel != "":
+		return []string{*benchModel}
+	}
+	if raw := envOr("MLX_BENCH_MODELS", ""); raw != "" {
+		return csvList(raw)
+	}
+	if model := envOr("MLX_BENCH_MODEL", ""); model != "" {
+		return []string{model}
+	}
+	return append([]string(nil), defaultBenchModels...)
+}
+
 type runConfig struct {
 	name  string
 	cmd   string
@@ -118,147 +182,24 @@ type runConfig struct {
 	extra bool
 }
 
-// BenchmarkSpecDec compares mlx-lm-generate (GPU) vs mlx-ane-generate (ANE)
-// across standard and speculative decoding configurations.
-//
-// Default configs run standard decode for both engines. Use -configs=all
-// or MLX_BENCH_CONFIGS to expand the matrix to include speculative decoding,
-// MTP, and ANE-specific decode plane modes.
+// BenchmarkSpecDec runs the stable release comparison set.
 func BenchmarkSpecDec(b *testing.B) {
-	model := *benchModel
-	if model == "" {
-		model = envOr("MLX_BENCH_MODEL", "mlx-community/Qwen3.5-4B-4bit")
-	}
+	benchmarkSpecDec(b, false)
+}
+
+// BenchmarkSpecDecExplore runs the wider exploratory configuration set.
+func BenchmarkSpecDecExplore(b *testing.B) {
+	benchmarkSpecDec(b, true)
+}
+
+func benchmarkSpecDec(b *testing.B, includeExplore bool) {
+	models := resolveBenchModels()
 	draftModel := *benchDraftModel
 	if draftModel == "" {
 		draftModel = envOr("MLX_BENCH_DRAFT_MODEL", "")
 	}
 	prompt := envOr("MLX_BENCH_PROMPT", "Explain the theory of relativity in simple terms.")
 	maxTokens := envOr("MLX_BENCH_MAX_TOKENS", "200")
-	modelName := shortModelName(model)
-
-	goBase := []string{"-model", model, "-prompt", prompt, "-max-tokens", maxTokens}
-	aneBase := []string{"-model", model, "-prompt", prompt, "-max-tokens", maxTokens}
-
-	configs := []runConfig{
-		// Default: standard decode, GPU vs ANE
-		{
-			name: "engine=Go/config=standard",
-			cmd:  "mlx-lm-generate",
-			args: append([]string{}, goBase...),
-		},
-		{
-			name: "engine=ANE/config=standard",
-			cmd:  "mlx-ane-generate",
-			args: append([]string{}, aneBase...),
-		},
-
-		// ANE with decode plane enabled
-		{
-			name:  "engine=ANE/config=decode-plane",
-			cmd:   "mlx-ane-generate",
-			args:  append(append([]string{}, aneBase...), "--ane-decode-plane", "qwen35"),
-			extra: true,
-		},
-
-		// ANE with forward routing
-		{
-			name:  "engine=ANE/config=ane-forward-prefill",
-			cmd:   "mlx-ane-generate",
-			args:  append(append([]string{}, aneBase...), "--ane-forward", "prefill"),
-			extra: true,
-		},
-		{
-			name:  "engine=ANE/config=ane-forward-all",
-			cmd:   "mlx-ane-generate",
-			args:  append(append([]string{}, aneBase...), "--ane-forward", "all"),
-			extra: true,
-		},
-	}
-
-	// Speculative decoding configs (require draft model)
-	if draftModel != "" {
-		specGoBase := append(append([]string{}, goBase...), "-draft-model", draftModel)
-		specANEBase := append(append([]string{}, aneBase...), "-draft-model", draftModel)
-
-		configs = append(configs,
-			// Go speculative (standard path)
-			runConfig{
-				name:  "engine=Go/config=spec-standard",
-				cmd:   "mlx-lm-generate",
-				args:  append(append([]string{}, specGoBase...), "-speculative-path", "standard"),
-				extra: true,
-			},
-			// Go speculative (SSD path)
-			runConfig{
-				name:  "engine=Go/config=spec-ssd",
-				cmd:   "mlx-lm-generate",
-				args:  append(append([]string{}, specGoBase...), "-speculative-path", "ssd"),
-				extra: true,
-			},
-
-			// ANE speculative (standard path)
-			runConfig{
-				name:  "engine=ANE/config=spec-standard",
-				cmd:   "mlx-ane-generate",
-				args:  append(append([]string{}, specANEBase...), "-speculative-path", "standard"),
-				extra: true,
-			},
-			// ANE speculative (SSD path)
-			runConfig{
-				name:  "engine=ANE/config=spec-ssd",
-				cmd:   "mlx-ane-generate",
-				args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd"),
-				extra: true,
-			},
-
-			// ANE speculative + decode plane
-			runConfig{
-				name:  "engine=ANE/config=spec-ssd+decode-plane",
-				cmd:   "mlx-ane-generate",
-				args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-decode-plane", "qwen35"),
-				extra: true,
-			},
-
-			// ANE speculative + ANE draft routing
-			runConfig{
-				name:  "engine=ANE/config=spec-ssd+ane-speculative",
-				cmd:   "mlx-ane-generate",
-				args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-speculative", "both-all"),
-				extra: true,
-			},
-
-			// ANE speculative + draft model on ANE
-			runConfig{
-				name:  "engine=ANE/config=spec-ssd+ane-draft",
-				cmd:   "mlx-ane-generate",
-				args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-draft-modelc", "auto"),
-				extra: true,
-			},
-		)
-	}
-
-	// MTP configs (no draft model needed)
-	configs = append(configs,
-		runConfig{
-			name:  "engine=Go/config=mtp",
-			cmd:   "mlx-lm-generate",
-			args:  append(append([]string{}, goBase...), "-mtp"),
-			extra: true,
-		},
-		runConfig{
-			name:  "engine=ANE/config=mtp",
-			cmd:   "mlx-ane-generate",
-			args:  append(append([]string{}, aneBase...), "-mtp"),
-			extra: true,
-		},
-		runConfig{
-			name:  "engine=ANE/config=mtp+decode-plane",
-			cmd:   "mlx-ane-generate",
-			args:  append(append([]string{}, aneBase...), "-mtp", "--ane-decode-plane", "qwen35"),
-			extra: true,
-		},
-	)
 
 	// Resolve which extra configs to include.
 	raw := *benchConfigs
@@ -267,12 +208,8 @@ func BenchmarkSpecDec(b *testing.B) {
 	}
 	want := make(map[string]bool)
 	if raw == "all" {
-		for _, c := range configs {
-			if c.extra {
-				if i := strings.LastIndex(c.name, "config="); i >= 0 {
-					want[c.name[i+len("config="):]] = true
-				}
-			}
+		for _, label := range specdecExploreConfigLabels {
+			want[label] = true
 		}
 	} else if raw != "" {
 		for _, s := range strings.Split(raw, ",") {
@@ -280,38 +217,158 @@ func BenchmarkSpecDec(b *testing.B) {
 		}
 	}
 
-	for _, cfg := range configs {
-		if cfg.extra {
-			configName := cfg.name
-			if i := strings.LastIndex(configName, "config="); i >= 0 {
-				configName = configName[i+len("config="):]
-			}
-			if !want[configName] {
+	for _, model := range models {
+		modelName := shortModelName(model)
+		goBase := []string{"-model", model, "-prompt", prompt, "-max-tokens", maxTokens}
+		aneBase := []string{"-model", model, "-prompt", prompt, "-max-tokens", maxTokens}
+
+		configs := []runConfig{
+			{
+				name: "engine=Go/config=standard",
+				cmd:  "mlx-lm-generate",
+				args: append([]string{}, goBase...),
+			},
+			{
+				name: "engine=ANE/config=standard",
+				cmd:  "mlx-ane-generate",
+				args: append([]string{}, aneBase...),
+			},
+			{
+				name: "engine=ANE/config=auto-preset",
+				cmd:  "mlx-ane-generate",
+				args: append(append([]string{}, aneBase...), "--ane-preset", "auto"),
+			},
+			{
+				name:  "engine=ANE/config=decode-plane",
+				cmd:   "mlx-ane-generate",
+				args:  append(append([]string{}, aneBase...), "--ane-decode-plane", "qwen35"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=ane-forward-prefill",
+				cmd:   "mlx-ane-generate",
+				args:  append(append([]string{}, aneBase...), "--ane-forward", "prefill"),
+				extra: true,
+			},
+			{
+				name:  "engine=ANE/config=ane-forward-all",
+				cmd:   "mlx-ane-generate",
+				args:  append(append([]string{}, aneBase...), "--ane-forward", "all"),
+				extra: true,
+			},
+		}
+
+		if draftModel != "" {
+			specGoBase := append(append([]string{}, goBase...), "-draft-model", draftModel)
+			specANEBase := append(append([]string{}, aneBase...), "-draft-model", draftModel)
+
+			configs = append(configs,
+				runConfig{
+					name:  "engine=Go/config=spec-standard",
+					cmd:   "mlx-lm-generate",
+					args:  append(append([]string{}, specGoBase...), "-speculative-path", "standard"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=Go/config=spec-ssd",
+					cmd:   "mlx-lm-generate",
+					args:  append(append([]string{}, specGoBase...), "-speculative-path", "ssd"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=ANE/config=spec-standard",
+					cmd:   "mlx-ane-generate",
+					args:  append(append([]string{}, specANEBase...), "-speculative-path", "standard"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=ANE/config=spec-ssd",
+					cmd:   "mlx-ane-generate",
+					args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=ANE/config=spec-ssd+decode-plane",
+					cmd:   "mlx-ane-generate",
+					args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-decode-plane", "qwen35"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=ANE/config=spec-ssd+ane-speculative",
+					cmd:   "mlx-ane-generate",
+					args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-speculative", "both-all"),
+					extra: true,
+				},
+				runConfig{
+					name:  "engine=ANE/config=spec-ssd+ane-draft",
+					cmd:   "mlx-ane-generate",
+					args:  append(append([]string{}, specANEBase...), "-speculative-path", "ssd", "--ane-draft-modelc", "auto"),
+					extra: true,
+				},
+			)
+		}
+
+		configs = append(configs,
+			runConfig{
+				name:  "engine=Go/config=mtp",
+				cmd:   "mlx-lm-generate",
+				args:  append(append([]string{}, goBase...), "-mtp"),
+				extra: true,
+			},
+			runConfig{
+				name:  "engine=ANE/config=mtp",
+				cmd:   "mlx-ane-generate",
+				args:  append(append([]string{}, aneBase...), "-mtp"),
+				extra: true,
+			},
+			runConfig{
+				name:  "engine=ANE/config=mtp+decode-plane",
+				cmd:   "mlx-ane-generate",
+				args:  append(append([]string{}, aneBase...), "-mtp", "--ane-decode-plane", "qwen35"),
+				extra: true,
+			},
+		)
+
+		for _, cfg := range configs {
+			if cfg.extra != includeExplore {
 				continue
 			}
-		}
-
-		prefix := "model=" + modelName + "/" + cfg.name
-		if _, err := exec.LookPath(cfg.cmd); err != nil {
-			b.Run(prefix, func(b *testing.B) { b.Skipf("%s not found in PATH", cfg.cmd) })
-			continue
-		}
-
-		b.Run(prefix, func(b *testing.B) {
-			for b.Loop() {
-				time.Sleep(time.Second) // settle between runs
-				b.ResetTimer()
-				s, err := runCLI(b, cfg.cmd, cfg.args)
-				if err != nil {
-					b.Fatal(err)
-				}
-				b.ReportMetric(s.genTPS, "tok/s")
-				b.ReportMetric(s.prefillTPS, "prefill-tok/s")
-				b.ReportMetric(float64(s.genTokens), "gen-tokens")
-				if s.peakMemGB > 0 {
-					b.ReportMetric(s.peakMemGB, "peak-GB")
+			if includeExplore && len(want) > 0 {
+				configName := specdecConfigLabel(cfg.name)
+				if !want[configName] {
+					continue
 				}
 			}
-		})
+
+			prefix := "model=" + modelName + "/" + cfg.name
+			if _, err := exec.LookPath(cfg.cmd); err != nil {
+				b.Run(prefix, func(b *testing.B) { b.Skipf("%s not found in PATH", cfg.cmd) })
+				continue
+			}
+
+			b.Run(prefix, func(b *testing.B) {
+				for b.Loop() {
+					time.Sleep(time.Second)
+					b.ResetTimer()
+					s, err := runCLI(b, cfg.cmd, cfg.args)
+					if err != nil {
+						b.Fatal(err)
+					}
+					b.ReportMetric(s.genTPS, "tok/s")
+					b.ReportMetric(s.prefillTPS, "prefill-tok/s")
+					b.ReportMetric(float64(s.genTokens), "gen-tokens")
+					if s.peakMemGB > 0 {
+						b.ReportMetric(s.peakMemGB, "peak-GB")
+					}
+				}
+			})
+		}
 	}
+}
+
+func specdecConfigLabel(name string) string {
+	if i := strings.LastIndex(name, "config="); i >= 0 {
+		return name[i+len("config="):]
+	}
+	return name
 }

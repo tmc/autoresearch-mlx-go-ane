@@ -7,13 +7,15 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/tmc/mlx-go-ane/internal/cmdwrap"
-	"github.com/tmc/mlx-go-lm/lmgenerate"
 	_ "github.com/tmc/mlx-go-ane/register"
+	"github.com/tmc/mlx-go-lm/lmgenerate"
 )
 
 var aneGenerateFlags = []cmdwrap.FlagSpec{
+	{Name: "ane-preset", Env: "MLXGO_ANE_PRESET", Usage: "Apply a named ANE preset: off, auto, qwen3-fast, qwen35-fast, qwen35-decode", Kind: cmdwrap.StringFlag},
 	{Name: "ane-speculative", Env: "MLXGO_ANE_SPECULATIVE", Usage: "Route speculative linear ops to ANE: off, draft-prefill, target-prefill, both-prefill, draft-all, target-all, both-all", Kind: cmdwrap.StringFlag},
 	{Name: "ane-speculative-min-seq", Env: "MLXGO_ANE_SPECULATIVE_MIN_SEQ", Usage: "Minimum sequence length before speculative calls route to ANE", Kind: cmdwrap.IntFlag},
 	{Name: "ane-forward", Env: "MLXGO_ANE_FORWARD", Usage: "Route standard forward linear ops to ANE: off, prefill, all", Kind: cmdwrap.StringFlag},
@@ -38,10 +40,114 @@ func main() {
 	if prepared.Help {
 		cmdwrap.PrintHelp(aneGenerateFlags)
 	}
+	applyANEPreset(&prepared)
 	if err := cmdwrap.ApplyEnv(prepared.Env); err != nil {
 		_, _ = os.Stderr.WriteString("Error: " + err.Error() + "\n")
 		os.Exit(2)
 	}
 	os.Args = append([]string{"mlx-ane-generate"}, prepared.Args...)
 	lmgenerate.Main()
+}
+
+func applyANEPreset(prepared *cmdwrap.Prepared) {
+	if prepared == nil {
+		return
+	}
+	preset := preparedEnv(prepared.Env, "MLXGO_ANE_PRESET")
+	if preset == "" {
+		preset = os.Getenv("MLXGO_ANE_PRESET")
+	}
+	if preset == "" {
+		return
+	}
+
+	model := flagValue(prepared.Args, "-model", "--model")
+	for _, kv := range resolveANEPreset(preset, model) {
+		if envSet(prepared.Env, kv.key) || os.Getenv(kv.key) != "" {
+			continue
+		}
+		prepared.Env = append(prepared.Env, kv.key+"="+kv.value)
+	}
+}
+
+type envKV struct {
+	key   string
+	value string
+}
+
+func resolveANEPreset(name, model string) []envKV {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "off":
+		return []envKV{
+			{key: "MLXGO_ANE_FORWARD", value: "off"},
+			{key: "MLXGO_ANE_DECODE_PLANE", value: "off"},
+			{key: "MLXGO_ANE_SPECULATIVE", value: "off"},
+		}
+	case "qwen3-fast":
+		return []envKV{
+			{key: "MLXGO_ANE_FORWARD", value: "prefill"},
+			{key: "MLXGO_ANE_DECODE_PLANE", value: "off"},
+		}
+	case "qwen35-fast":
+		return []envKV{
+			{key: "MLXGO_ANE_FORWARD", value: "all"},
+			{key: "MLXGO_ANE_DECODE_PLANE", value: "qwen35"},
+		}
+	case "qwen35-decode":
+		return []envKV{
+			{key: "MLXGO_ANE_FORWARD", value: "off"},
+			{key: "MLXGO_ANE_DECODE_PLANE", value: "qwen35"},
+		}
+	case "auto":
+		lower := strings.ToLower(model)
+		switch {
+		case strings.Contains(lower, "qwen3.5"):
+			return resolveANEPreset("qwen35-fast", model)
+		case strings.Contains(lower, "qwen3"):
+			return resolveANEPreset("qwen3-fast", model)
+		default:
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
+func flagValue(args []string, shortName, longName string) string {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == shortName || arg == longName {
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+			return ""
+		}
+		if strings.HasPrefix(arg, shortName+"=") {
+			return strings.TrimPrefix(arg, shortName+"=")
+		}
+		if strings.HasPrefix(arg, longName+"=") {
+			return strings.TrimPrefix(arg, longName+"=")
+		}
+	}
+	return ""
+}
+
+func preparedEnv(env []string, key string) string {
+	for _, kv := range env {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && k == key {
+			return v
+		}
+	}
+	return ""
+}
+
+func envSet(env []string, key string) bool {
+	for _, kv := range env {
+		k, _, ok := strings.Cut(kv, "=")
+		if ok && k == key {
+			return true
+		}
+	}
+	return false
 }
