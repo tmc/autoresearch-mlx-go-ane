@@ -4,11 +4,21 @@
 /mlx-ane-generate
 /mlx-ane-train
 /setup-hub
+/cmd/bench-note/bench-note
+/cpu.prof
 
 # Data
 .autoresearch-key
 results.tsv
+/adapters/
+/benchmarks/training/adapters/
+/cmd/mlx-ane-train/adapters/
 
 # Tool caches
 .claude/
 .gocache/
+.gomodcache/
+.tmp-go/
+/go.work
+/go.work.sum
+/b1.txt
