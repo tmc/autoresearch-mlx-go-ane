@@ -16,6 +16,8 @@ import (
 )
 
 func TestFFNStageAccuracy(t *testing.T) {
+	requireANEIntegrationTests(t)
+
 	modelID := os.Getenv("MODEL")
 	if modelID == "" {
 		modelID = "mlx-community/Qwen2.5-3B-Instruct-4bit"
@@ -261,6 +263,8 @@ func TestFFNStageAccuracy(t *testing.T) {
 
 // TestFFNStageSmall tests with a small identity-like FFN to verify weight layout.
 func TestFFNStageSmall(t *testing.T) {
+	requireANEIntegrationTests(t)
+
 	dim := 2048
 	hidden := 5504
 

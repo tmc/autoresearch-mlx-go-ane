@@ -82,7 +82,7 @@ func (m *gpuFallbackFakeModel) LoadWeights(weightFiles ...string) error {
 
 func (m *gpuFallbackFakeModel) LayerAttentionForward(i int, x *mlx.Array, mask any, cache kvcache.Cache) (*mlx.Array, error) {
 	m.attnCalls++
-	return mlx.Zeros(x.Shape(), x.Dtype(), nil)
+	return mlx.Zeros(x.Shape(), x.Dtype()), nil
 }
 
 func (m *gpuFallbackFakeModel) LayerInputNormWeight(i int) *mlx.Array {
@@ -112,7 +112,7 @@ func (m *gpuFallbackFakeModel) EmbedTokens(ids *mlx.Array) (*mlx.Array, error) {
 
 func (m *gpuFallbackFakeModel) LayerMLPForward(layerIdx int, normalized *mlx.Array) (*mlx.Array, error) {
 	m.mlpCalls++
-	return mlx.Zeros(normalized.Shape(), normalized.Dtype(), nil)
+	return mlx.Zeros(normalized.Shape(), normalized.Dtype()), nil
 }
 
 func TestWrapGPUFallbackInterceptsSingleTokenDecode(t *testing.T) {

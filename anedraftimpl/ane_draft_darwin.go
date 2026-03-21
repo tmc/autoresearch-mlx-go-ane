@@ -16,10 +16,11 @@ import (
 	"time"
 	"unsafe"
 
+	mlxgoane "github.com/tmc/mlx-go-ane"
 	"github.com/tmc/mlx-go-lm/mlxlm/decode"
+	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	"github.com/tmc/mlx-go-lm/mlxlm/sample"
-	mlxgoane "github.com/tmc/mlx-go-ane"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/modelir"
 )
@@ -2415,7 +2416,7 @@ func dequantizeLinearLayerWeightToInOut(layer models.LinearLayer, weight *mlx.Ar
 	bits := int(intFieldByName(v, "bits", 4))
 	mode := quantModeFieldByName(v, "mode", mlx.QuantizationModeAffine)
 
-	dequantized, err := mlx.Dequantize(
+	dequantized := mlx.Dequantize(
 		weight,
 		scales,
 		biases,
@@ -2423,16 +2424,9 @@ func dequantizeLinearLayerWeightToInOut(layer models.LinearLayer, weight *mlx.Ar
 		mlx.OptInt(bits),
 		mode,
 		mlx.OptionalDtype{Value: mlx.Float32, Has_value: true},
-		nil,
 	)
-	if err != nil {
-		return nil, err
-	}
-	inOut, err := mlx.Transpose(dequantized, nil)
+	inOut := mlx.Transpose(dequantized)
 	dequantized.Free()
-	if err != nil {
-		return nil, fmt.Errorf("transpose dequantized weight: %w", err)
-	}
 	return inOut, nil
 }
 
@@ -2502,11 +2496,7 @@ func copyArrayToFloat32(arr *mlx.Array, label string) ([]float32, error) {
 	source := arr
 	var converted *mlx.Array
 	if arr.Dtype() != mlx.Float32 {
-		var err error
-		converted, err = mlx.Astype(arr, mlx.Float32, nil)
-		if err != nil {
-			return nil, fmt.Errorf("%s: cast to float32: %w", label, err)
-		}
+		converted = mlx.Astype(arr, mlx.Float32)
 		source = converted
 		defer converted.Free()
 	}
@@ -2624,7 +2614,7 @@ func dequantizeProjectionWeightFromStruct(parent reflect.Value, fieldName string
 	bits := int(intFieldByName(parent, "bits", 4))
 	mode := quantModeFieldByName(parent, "quantMode", mlx.QuantizationModeAffine)
 
-	dequantized, err := mlx.Dequantize(
+	dequantized := mlx.Dequantize(
 		weight,
 		scales,
 		biases,
@@ -2632,11 +2622,7 @@ func dequantizeProjectionWeightFromStruct(parent reflect.Value, fieldName string
 		mlx.OptInt(bits),
 		mode,
 		mlx.OptionalDtype{Value: mlx.Float32, Has_value: true},
-		nil,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("dequantize projection %s: %w", fieldName, err)
-	}
 	return dequantized, nil
 }
 
@@ -2681,35 +2667,52 @@ func newReferenceOnlyDraftModelDrafter(draftModel models.LanguageModel) (decode.
 		multiCache = models.NewMultiLayerCacheFromList([]models.Cache{cache})
 	}
 
-	forward := func(input *mlx.Array, c models.Cache) (*mlx.Array, models.Cache, error) {
-		return draftModel.Forward(input, c)
-	}
-	sampleGreedy := func(logits *mlx.Array) (int32, error) {
-		tokArr, err := sample.Token(context.Background(), logits, 0, 1.0, 0, 0)
+	forward := func(ctx context.Context, input *mlx.Array, c kvcache.Cache) (*mlx.Array, kvcache.Cache) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		logits, nextCache, err := models.Forward(ctx, draftModel, input, c)
 		if err != nil {
-			return 0, err
+			panic(err)
+		}
+		return logits, nextCache
+	}
+	sampleGreedy := func(ctx context.Context, logits *mlx.Array) int32 {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		tokArr, err := sample.Token(ctx, logits, 0, 1.0, 0, 0)
+		if err != nil {
+			panic(err)
 		}
 		defer tokArr.Free()
 		if err := mlx.Eval(tokArr); err != nil {
-			return 0, fmt.Errorf("eval sampled token: %w", err)
+			panic(fmt.Errorf("eval sampled token: %w", err))
 		}
 		v, err := tokArr.Item()
 		if err != nil {
-			return 0, fmt.Errorf("sampled token item: %w", err)
+			panic(fmt.Errorf("sampled token item: %w", err))
 		}
 		switch tv := v.(type) {
 		case int32:
-			return tv, nil
+			return tv
 		case int64:
-			return int32(tv), nil
+			return int32(tv)
 		case uint32:
-			return int32(tv), nil
+			return int32(tv)
 		default:
-			return 0, fmt.Errorf("unexpected sampled token type %T", v)
+			panic(fmt.Errorf("unexpected sampled token type %T", v))
 		}
 	}
-	lazyGreedy := func(logits *mlx.Array) (*mlx.Array, error) {
-		return sample.Token(context.Background(), logits, 0, 1.0, 0, 0)
+	lazyGreedy := func(ctx context.Context, logits *mlx.Array) *mlx.Array {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		tokArr, err := sample.Token(ctx, logits, 0, 1.0, 0, 0)
+		if err != nil {
+			panic(err)
+		}
+		return tokArr
 	}
 
 	d := decode.NewDraftModelDrafter(forward, multiCache, sampleGreedy)
@@ -3075,10 +3078,7 @@ func makeDraftTokenEmbeddingLookup(
 			defer embed.Free()
 			embF32 := embed
 			if embed.Dtype() != mlx.Float32 {
-				embF32, err = mlx.Astype(embed, mlx.Float32, nil)
-				if err != nil {
-					return nil, fmt.Errorf("cast embedding to float32: %w", err)
-				}
+				embF32 = mlx.Astype(embed, mlx.Float32)
 				defer embF32.Free()
 			}
 			row, err := mlx.ToSlice[float32](embF32)
@@ -3136,11 +3136,7 @@ func materializeEmbeddingsViaLookup(
 		}
 		embF32 := embed
 		if embed.Dtype() != mlx.Float32 {
-			embF32, err = mlx.Astype(embed, mlx.Float32, nil)
-			if err != nil {
-				embed.Free()
-				return nil, fmt.Errorf("cast chunk [%d,%d) to float32: %w", start, end, err)
-			}
+			embF32 = mlx.Astype(embed, mlx.Float32)
 		}
 		chunkVals, err := mlx.ToSlice[float32](embF32)
 		if embF32 != embed {
@@ -3197,10 +3193,7 @@ func copyEmbeddingsFromArray(emb *mlx.Array, cfg *models.ModelConfig) (hiddenDim
 
 	embF32 := emb
 	if emb.Dtype() != mlx.Float32 {
-		embF32, err = mlx.Astype(emb, mlx.Float32, nil)
-		if err != nil {
-			return 0, 0, nil, fmt.Errorf("cast embeddings to float32: %w", err)
-		}
+		embF32 = mlx.Astype(emb, mlx.Float32)
 		defer embF32.Free()
 	}
 	embeddings, err = mlx.ToSlice[float32](embF32)
@@ -3797,7 +3790,7 @@ func (r *aneDraftReferenceRunner) Step(tokenID int) ([]float32, error) {
 		return nil, fmt.Errorf("draft reference runner: build token array: %w", err)
 	}
 	defer tokenArray.Free()
-	logits, nextCache, err := r.model.Forward(tokenArray, r.cache)
+	logits, nextCache, err := models.Forward(context.Background(), r.model, tokenArray, r.cache)
 	if err != nil {
 		return nil, fmt.Errorf("draft reference runner: forward: %w", err)
 	}
@@ -3822,10 +3815,7 @@ func lastTokenLogitsFromOutput(logits *mlx.Array) ([]float32, error) {
 	}
 	source := logits
 	if logits.Dtype() != mlx.Float32 {
-		cast, err := mlx.Astype(logits, mlx.Float32, nil)
-		if err != nil {
-			return nil, fmt.Errorf("draft reference logits: cast to float32: %w", err)
-		}
+		cast := mlx.Astype(logits, mlx.Float32)
 		defer cast.Free()
 		source = cast
 	}

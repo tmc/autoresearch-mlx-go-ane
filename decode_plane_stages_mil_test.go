@@ -16,6 +16,8 @@ import (
 // TestFFNStageMILAccuracy compares GPU LayerMLPForward output against
 // ANE CompileFFNMIL output using real Qwen2.5-3B weights.
 func TestFFNStageMILAccuracy(t *testing.T) {
+	requireANEIntegrationTests(t)
+
 	modelID := os.Getenv("MODEL")
 	if modelID == "" {
 		modelID = "mlx-community/Qwen2.5-3B-Instruct-4bit"

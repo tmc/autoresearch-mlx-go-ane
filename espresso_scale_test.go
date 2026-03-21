@@ -16,6 +16,8 @@ import (
 // TestEspressoFFNWeightScale tests the Espresso FFN at various weight
 // magnitudes to find the overflow threshold.
 func TestEspressoFFNWeightScale(t *testing.T) {
+	requireANEIntegrationTests(t)
+
 	if !appleneuralengine.GetANEDeviceInfoClass().HasANE() {
 		t.Skip("ANE unavailable")
 	}

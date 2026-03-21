@@ -15,6 +15,7 @@ import (
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlx/random"
+	raw "github.com/tmc/mlx-go/mlx/raw"
 
 	anedecode "github.com/tmc/mlx-go-ane/decode"
 )
@@ -116,7 +117,7 @@ func BenchmarkInference(b *testing.B) {
 				b.ReportMetric(float64(lastRes.PrefillDuration.Milliseconds()), "prefill_ms")
 				b.ReportMetric(float64(lastRes.GenerateDuration.Milliseconds()), "gen_ms")
 				peakMemGB := 0.0
-				if peakBytes, err := mlx.GetPeakMemory(); err == nil {
+				if peakBytes := mlx.GetPeakMemory(); peakBytes > 0 {
 					peakMemGB = float64(peakBytes) / (1024 * 1024 * 1024)
 				} else {
 					var m runtime.MemStats
@@ -187,12 +188,12 @@ func newBenchEngine(modelID, aneMode string) (*benchEngine, error) {
 }
 
 func (e *benchEngine) warmup() {
-	input, _ := mlx.Zeros([]int{1, 1}, mlx.Int32, nil)
+	input := mlx.Zeros([]int{1, 1}, mlx.Int32)
 	cache := models.NewMultiLayerCache(e.model.Config().NumLayers)
-	out, _, err := e.model.Forward(input, cache)
+	out, _, err := modelForward(context.Background(), e.model, input, cache)
 	if err == nil {
 		mlx.Eval(out)
-		mlx.Synchronize(nil)
+		mlx.Synchronize()
 	}
 	input.Free()
 
@@ -220,13 +221,22 @@ func (e *benchEngine) generate(promptTokens []int32, maxTokens int) (GenerateRes
 	defer input.Free()
 
 	cache := models.NewMultiLayerCache(e.model.Config().NumLayers)
-	key := random.MustKey(0)
-	keyReshaped := mlx.MustReshape(key, []int{2}, nil)
-	keyFresh := mlx.MustCopy(keyReshaped, nil)
+	key := random.Key(0)
+	defer key.Free()
+	keyReshaped, err := raw.Reshape(key, []int{2}, nil)
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("reshape key: %w", err)
+	}
+	defer keyReshaped.Free()
+	keyFresh, err := raw.Copy(keyReshaped, nil)
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("copy key: %w", err)
+	}
+	defer keyFresh.Free()
 	randState := decode.NewRandomState(keyFresh)
 
 	forwardPass := func(inp *mlx.Array, c models.Cache) (*mlx.Array, models.Cache, error) {
-		return e.model.Forward(inp, c)
+		return modelForward(context.Background(), e.model, inp, c)
 	}
 
 	opts := decode.Options{
@@ -261,11 +271,11 @@ func (e *benchEngine) generate(promptTokens []int32, maxTokens int) (GenerateRes
 
 	total := time.Since(start)
 	return GenerateResult{
-		PromptTokens:    len(promptTokens),
-		GeneratedTokens: generated,
-		PrefillDuration: prefillDuration,
+		PromptTokens:     len(promptTokens),
+		GeneratedTokens:  generated,
+		PrefillDuration:  prefillDuration,
 		GenerateDuration: total,
-		TotalDuration:   total,
+		TotalDuration:    total,
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/tmc/mlx-go/mlx"
@@ -15,6 +16,10 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	if !benchmarksRequested(os.Args) {
+		os.Exit(m.Run())
+	}
+
 	modelID := os.Getenv("MODEL")
 	if modelID == "" {
 		modelID = DefaultModel
@@ -69,7 +74,8 @@ func BenchmarkGenerate(b *testing.B) {
 	b.ReportMetric(float64(lastRes.GenerateDuration.Microseconds())/1000, "gen_ms")
 
 	var peakMemGB float64
-	if peakBytes, err := mlx.GetPeakMemory(); err == nil {
+	peakBytes := mlx.GetPeakMemory()
+	if peakBytes > 0 {
 		peakMemGB = float64(peakBytes) / (1 << 30)
 	} else {
 		var m runtime.MemStats
@@ -91,4 +97,20 @@ func BenchmarkPrefill(b *testing.B) {
 	}
 
 	b.ReportMetric(lastRes.PrefillTokPerSec(), "prompt_tok/s")
+}
+
+func benchmarksRequested(args []string) bool {
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-test.bench") {
+			continue
+		}
+		if arg == "-test.bench" {
+			return true
+		}
+		if strings.HasPrefix(arg, "-test.bench=") {
+			value := strings.TrimPrefix(arg, "-test.bench=")
+			return value != "" && value != "^$"
+		}
+	}
+	return false
 }

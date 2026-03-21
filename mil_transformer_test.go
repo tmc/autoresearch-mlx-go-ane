@@ -22,8 +22,8 @@ import (
 	"github.com/tmc/apple/objc"
 	"github.com/tmc/apple/objectivec"
 	"github.com/tmc/apple/private/appleneuralengine"
-	anereify "github.com/tmc/mlx-go/modelir/target/mil/ane"
 	publicmodelir "github.com/tmc/mlx-go/modelir"
+	anereify "github.com/tmc/mlx-go/modelir/target/mil/ane"
 )
 
 const milTransformerTestEnv = "MLXGO_ANE_TEST_MIL_TRANSFORMER"
@@ -4501,6 +4501,9 @@ func TestMILTransformerRealQwenSelectiveNormGateOpSequenceDiff(t *testing.T) {
 }
 
 func TestMILTransformerRealQwenSelectiveNormGateFullStructuralDiff(t *testing.T) {
+	if os.Getenv(milTransformerFeatureMatrixEnv) == "" {
+		t.Skipf("set %s=1 to run real qwen selective-norm gate full structural diff", milTransformerFeatureMatrixEnv)
+	}
 	prog := qwenFixtureSingleLayerProgram(t)
 
 	opts := ReifyOptions{
@@ -4613,6 +4616,9 @@ func TestMILTransformerRealQwenSelectiveNormGateCompileProbe(t *testing.T) {
 }
 
 func TestMILTransformerRealQwenSelectiveNormGateConstDiff(t *testing.T) {
+	if os.Getenv(milTransformerFeatureMatrixEnv) == "" {
+		t.Skipf("set %s=1 to run real qwen selective-norm gate const diff", milTransformerFeatureMatrixEnv)
+	}
 	prog := qwenFixtureSingleLayerProgram(t)
 
 	opts := ReifyOptions{
@@ -4679,6 +4685,9 @@ func TestMILTransformerRealQwenSelectiveNormGateConstDiff(t *testing.T) {
 }
 
 func TestMILTransformerRealQwenSelectiveNormGateWeightBlobShapeDiff(t *testing.T) {
+	if os.Getenv(milTransformerFeatureMatrixEnv) == "" {
+		t.Skipf("set %s=1 to run real qwen selective-norm gate weight-blob diff", milTransformerFeatureMatrixEnv)
+	}
 	prog := qwenFixtureSingleLayerProgram(t)
 
 	opts := ReifyOptions{
@@ -5099,7 +5108,6 @@ func TestMILTransformerProbeMatrix(t *testing.T) {
 		})
 	}
 }
-
 
 func runMILProbeCaseWithMapRetry(
 	t *testing.T,
@@ -10573,10 +10581,10 @@ func qwenFixtureSingleLayerProgram(t *testing.T) *publicmodelir.Program {
 	if !ok {
 		t.Fatal("runtime.Caller(0) failed")
 	}
-	fixturePath := filepath.Join(filepath.Dir(thisFile), "..", "..", "examples", "mlx-go-lm", "mlxlm", "models", "testdata", "qwen35_decode_trunk.modelir")
+	fixturePath := filepath.Join(filepath.Dir(thisFile), "..", "mlx-go", "examples", "mlx-go-lm", "mlxlm", "models", "testdata", "qwen35_decode_trunk.modelir")
 	textData, err := os.ReadFile(fixturePath)
 	if err != nil {
-		t.Fatalf("read fixture %s: %v", fixturePath, err)
+		t.Skipf("real qwen fixture unavailable at %s: %v", fixturePath, err)
 	}
 	prog, err := publicmodelir.ParseText(textData)
 	if err != nil {

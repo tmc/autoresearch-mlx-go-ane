@@ -24,11 +24,11 @@ import (
 
 // GenerateResult holds timing and throughput data from a generation run.
 type GenerateResult struct {
-	PromptTokens    int
-	GeneratedTokens int
-	PrefillDuration time.Duration
+	PromptTokens     int
+	GeneratedTokens  int
+	PrefillDuration  time.Duration
 	GenerateDuration time.Duration
-	TotalDuration   time.Duration
+	TotalDuration    time.Duration
 }
 
 // TokPerSec returns the end-to-end generation throughput.
@@ -172,12 +172,12 @@ func (e *Engine) encodePrompt(prompt string) ([]int32, error) {
 
 // warmup runs a single-token forward pass to trigger any lazy compilation.
 func (e *Engine) warmup() {
-	input, _ := mlx.Zeros([]int{1, 1}, mlx.Int32, nil)
+	input := mlx.Zeros([]int{1, 1}, mlx.Int32)
 	cache := e.newCache()
-	out, _, err := e.Model.Forward(input, cache)
+	out, _, err := modelForward(context.Background(), e.Model, input, cache)
 	if err == nil {
 		mlx.Eval(out)
-		mlx.Synchronize(nil)
+		mlx.Synchronize()
 	}
 	input.Free()
 
@@ -196,13 +196,13 @@ func (e *Engine) generateN(promptTokens []int32, maxTokens int) (GenerateResult,
 	defer input.Free()
 
 	cache := e.newCache()
-	key := random.MustKey(0)
+	key := random.Key(0)
 	keyReshaped := mlx.MustReshape(key, []int{2}, nil)
-	keyFresh := mlx.MustCopy(keyReshaped, nil)
+	keyFresh := mlx.Copy(keyReshaped)
 	randState := decode.NewRandomState(keyFresh)
 
 	forwardPass := func(inp *mlx.Array, c models.Cache) (*mlx.Array, models.Cache, error) {
-		return e.Model.Forward(inp, c)
+		return modelForward(context.Background(), e.Model, inp, c)
 	}
 
 	var eosTokenIDs []int32

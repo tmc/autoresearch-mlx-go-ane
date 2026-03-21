@@ -61,9 +61,7 @@ func TestMLXSurfaceSyncBridgeCopyInto(t *testing.T) {
 	if err := bridge.CopyInto(dst, src, nil); err != nil {
 		t.Fatalf("CopyInto: %v", err)
 	}
-	if err := mlx.Synchronize(nil); err != nil {
-		t.Fatalf("Synchronize: %v", err)
-	}
+	mlx.Synchronize()
 	got, err := mlx.ToSlice[float32](dst)
 	if err != nil {
 		t.Fatalf("ToSlice: %v", err)
@@ -168,10 +166,7 @@ func TestMLXSurfaceSyncBridgeCopyIntoSignalReadyLazySource(t *testing.T) {
 
 	base := mlx.NewArray([]float32{1, 2, 3, 4}, 2, 2)
 	defer base.Free()
-	src, err := mlx.Add(base, base, nil)
-	if err != nil {
-		t.Fatalf("Add: %v", err)
-	}
+	src := mlx.Add(base, base)
 	defer src.Free()
 
 	if err := bridge.CopyIntoSignalReady(dst, src, nil, 2); err != nil {
@@ -266,10 +261,7 @@ func TestMLXSurfaceSyncBridgeRMSNormIntoSignalReady(t *testing.T) {
 	weight := mlx.NewArray([]float32{1, 1, 1, 1}, 4)
 	defer weight.Free()
 
-	wantArr, err := fast.RMSNorm(src, weight, 1e-5, nil)
-	if err != nil {
-		t.Fatalf("fast.RMSNorm: %v", err)
-	}
+	wantArr := fast.RMSNorm(src, weight, 1e-5, nil)
 	defer wantArr.Free()
 	want, err := mlx.ToSlice[float32](wantArr)
 	if err != nil {
@@ -333,15 +325,9 @@ func TestMLXSurfaceSyncBridgeAddRMSNormIntoSignalReady(t *testing.T) {
 	weight := mlx.NewArray([]float32{1, 1, 1, 1}, 4)
 	defer weight.Free()
 
-	sum, err := mlx.Add(x, y, nil)
-	if err != nil {
-		t.Fatalf("Add: %v", err)
-	}
+	sum := mlx.Add(x, y)
 	defer sum.Free()
-	wantArr, err := fast.RMSNorm(sum, weight, 1e-5, nil)
-	if err != nil {
-		t.Fatalf("fast.RMSNorm: %v", err)
-	}
+	wantArr := fast.RMSNorm(sum, weight, 1e-5, nil)
 	defer wantArr.Free()
 	want, err := mlx.ToSlice[float32](wantArr)
 	if err != nil {
