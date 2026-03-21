@@ -1,5 +1,6 @@
 # Build artifacts
 *.test
+/autoresearch-cli
 /bench-note
 /mlx-ane-generate
 /mlx-ane-train
