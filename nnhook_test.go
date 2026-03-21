@@ -166,3 +166,58 @@ func TestLinearHookStatsResetAndFraction(t *testing.T) {
 		t.Fatalf("reset fallback reasons = %+v", reset.FallbackReasons)
 	}
 }
+
+func TestInstallNNLinearHookWithOptionsSetsAndRestoresMode(t *testing.T) {
+	prevMode := nn.CurrentLinearMode()
+	nn.SetLinearMode(nn.LinearModeInference)
+	defer nn.SetLinearMode(prevMode)
+
+	mode := nn.LinearModeTraining
+	restore := InstallNNLinearHookWithOptions(nil, LinearHookOptions{Mode: &mode})
+	if got := nn.CurrentLinearMode(); got != nn.LinearModeTraining {
+		t.Fatalf("CurrentLinearMode=%v want training", got)
+	}
+	restore()
+	if got := nn.CurrentLinearMode(); got != nn.LinearModeInference {
+		t.Fatalf("CurrentLinearMode=%v want inference after restore", got)
+	}
+}
+
+func TestInstallNNLinearHookNestedRestorePreservesPreviousSession(t *testing.T) {
+	weight, err := mlx.FromSlice([]float32{1, 0, 0, 1}, []int{2, 2}, mlx.Float32)
+	if err != nil {
+		t.Fatalf("FromSlice weight: %v", err)
+	}
+	defer weight.Free()
+	layer := nn.NewLinearWithArrays(weight, nil)
+
+	x, err := mlx.FromSlice([]float32{1, 2, 3, 4}, []int{2, 2}, mlx.Float32)
+	if err != nil {
+		t.Fatalf("FromSlice x: %v", err)
+	}
+	defer x.Free()
+
+	rt1 := NewRuntime(fakeExecutor{y: []float32{1, 2, 3, 4}})
+	rt2 := NewRuntime(fakeExecutor{y: []float32{5, 6, 7, 8}})
+
+	restore1 := InstallNNLinearHook(rt1)
+	restore2 := InstallNNLinearHook(rt2)
+
+	y := layer.Forward(x)
+	got := mlx.MustToSlice[float32](y)
+	y.Free()
+	if got[0] != 5 || got[1] != 6 {
+		t.Fatalf("top hook output=%v want second hook result", got)
+	}
+
+	restore2()
+
+	y = layer.Forward(x)
+	got = mlx.MustToSlice[float32](y)
+	y.Free()
+	if got[0] != 1 || got[1] != 2 {
+		t.Fatalf("restored hook output=%v want first hook result", got)
+	}
+
+	restore1()
+}

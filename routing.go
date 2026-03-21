@@ -89,6 +89,38 @@ func LinearRouteConfigForProfile(profile LinearRouteProfile) LinearRouteConfig {
 	}
 }
 
+// TrainingLinearRouteConfigForProfile returns a preset policy tuned for
+// training forwards, where deeper offload is often worth slightly higher
+// dispatch overhead to keep more work on ANE.
+func TrainingLinearRouteConfigForProfile(profile LinearRouteProfile) LinearRouteConfig {
+	switch profile {
+	case LinearRouteProfileConservative:
+		return LinearRouteConfig{
+			MinSpatial:          16,
+			ChannelMultiple:     16,
+			MaxCompileCacheSize: 96,
+		}
+	case LinearRouteProfileAggressive:
+		return LinearRouteConfig{
+			MinSpatial:          -1,
+			ChannelMultiple:     -1,
+			MaxCompileCacheSize: 160,
+		}
+	case LinearRouteProfileDisabled:
+		return LinearRouteConfig{
+			MinSpatial:          -1,
+			ChannelMultiple:     -1,
+			MaxCompileCacheSize: -1,
+		}
+	default:
+		return LinearRouteConfig{
+			MinSpatial:          8,
+			ChannelMultiple:     8,
+			MaxCompileCacheSize: 128,
+		}
+	}
+}
+
 // LinearRouteInput provides route-time facts for one linear call.
 type LinearRouteInput struct {
 	Batch  int

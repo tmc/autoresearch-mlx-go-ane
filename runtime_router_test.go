@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tmc/mlx-go/mlx"
+	"github.com/tmc/mlx-go/mlx/nn"
 )
 
 type fakeProbeExecutor struct {
@@ -273,6 +274,49 @@ func TestRuntimeRouterUsesExecutorRouteShape(t *testing.T) {
 	}
 	rt := NewRuntime(exec)
 	rt.Router = NewLinearRouter(DefaultLinearRouteConfig())
+
+	got, err := rt.Linear(context.Background(), x, w)
+	if err != nil {
+		t.Fatalf("Linear: %v", err)
+	}
+	defer got.Y.Free()
+
+	if exec.called != 1 {
+		t.Fatalf("ANE executor called=%d want=1", exec.called)
+	}
+	if got.Backend != BackendANE {
+		t.Fatalf("backend=%q want=%q", got.Backend, BackendANE)
+	}
+}
+
+func TestRuntimeRouterUsesTrainingRouterInTrainingMode(t *testing.T) {
+	prevMode := nn.CurrentLinearMode()
+	nn.SetLinearMode(nn.LinearModeTraining)
+	defer nn.SetLinearMode(prevMode)
+
+	x, err := mlx.FromSlice(make([]float32, 8*64), []int{8, 64}, mlx.Float32)
+	if err != nil {
+		t.Fatalf("FromSlice x: %v", err)
+	}
+	defer x.Free()
+	w, err := mlx.FromSlice(make([]float32, 64*64), []int{64, 64}, mlx.Float32)
+	if err != nil {
+		t.Fatalf("FromSlice w: %v", err)
+	}
+	defer w.Free()
+
+	exec := &fakeProbeExecutor{y: make([]float32, 8*64)}
+	rt := NewRuntime(exec)
+	rt.Router = NewLinearRouter(LinearRouteConfig{
+		MinSpatial:          16,
+		ChannelMultiple:     8,
+		MaxCompileCacheSize: 100,
+	})
+	rt.TrainingRouter = NewLinearRouter(LinearRouteConfig{
+		MinSpatial:          -1,
+		ChannelMultiple:     -1,
+		MaxCompileCacheSize: 160,
+	})
 
 	got, err := rt.Linear(context.Background(), x, w)
 	if err != nil {

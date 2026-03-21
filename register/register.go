@@ -6,11 +6,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tmc/mlx-go-lm/offload"
-	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	mlxgoane "github.com/tmc/mlx-go-ane"
-	"github.com/tmc/mlx-go-ane/decode"
 	_ "github.com/tmc/mlx-go-ane/anedraftimpl"
+	"github.com/tmc/mlx-go-ane/decode"
+	"github.com/tmc/mlx-go-lm/mlxlm/models"
+	"github.com/tmc/mlx-go-lm/offload"
+	"github.com/tmc/mlx-go/mlx/nn"
 )
 
 func init() {
@@ -28,18 +29,30 @@ func (trainingBackend) SetupRouting(ctx context.Context, modeRaw, profileRaw str
 	if err != nil {
 		return nil, err
 	}
-	exec, err := mlxgoane.NewApplePrivateExecutor()
+	exec, err := mlxgoane.NewApplePrivateDynamicLinearExecutor()
 	if err != nil {
 		return nil, err
 	}
 	rt := mlxgoane.NewRuntimeWithOptions(mlxgoane.RuntimeOptions{
-		Executor:           exec,
-		AllowFallback:      &allowFallback,
-		LinearRouteProfile: profile,
+		Executor:                   exec,
+		AllowFallback:              &allowFallback,
+		LinearRouteProfile:         profile,
+		TrainingLinearRouteProfile: profile,
 	})
 	stats := mlxgoane.NewLinearHookStats()
-	restore := mlxgoane.InstallNNLinearHookWithStats(rt, stats)
-	if restore == nil {
+	mode := nn.LinearModeTraining
+	restoreNN := mlxgoane.InstallNNLinearHookWithOptions(rt, mlxgoane.LinearHookOptions{
+		Stats: stats,
+		Mode:  &mode,
+	})
+	restoreModel := mlxgoane.InstallModelLinearHookWithOptions(rt, mlxgoane.LinearHookOptions{
+		Stats: stats,
+	})
+	restore := func() {
+		restoreModel()
+		restoreNN()
+	}
+	if restoreNN == nil && restoreModel == nil {
 		restore = func() {}
 	}
 	return &trainingRouting{
@@ -69,12 +82,40 @@ func (r *trainingRouting) Report() {
 		return
 	}
 	s := r.stats.Snapshot()
-	if s.TotalCalls == 0 {
-		return
-	}
+	fmt.Printf(
+		"ANE linear hook summary: total=%d ane=%d mlx=%d ane_frac=%.2f cache_hits=%d cache_misses=%d fallback_reasons=%s\n",
+		s.TotalCalls,
+		s.ANECalls,
+		s.MLXCalls,
+		s.ANEFraction(),
+		s.CacheHits,
+		s.CacheMisses,
+		s.FormatFallbackReasons(),
+	)
+	r.last = s
 }
 
-func (r *trainingRouting) ReportWindow(string) {}
+func (r *trainingRouting) ReportWindow(label string) {
+	if r == nil || r.stats == nil {
+		return
+	}
+	s := r.stats.Snapshot()
+	deltaTotal := s.TotalCalls - r.last.TotalCalls
+	deltaANE := s.ANECalls - r.last.ANECalls
+	deltaMLX := s.MLXCalls - r.last.MLXCalls
+	if deltaTotal == 0 {
+		return
+	}
+	fmt.Printf(
+		"ANE linear hook window[%s]: total=%d ane=%d mlx=%d ane_frac=%.2f\n",
+		label,
+		deltaTotal,
+		deltaANE,
+		deltaMLX,
+		float64(deltaANE)/float64(deltaTotal),
+	)
+	r.last = s
+}
 
 // speculativeBackend registers ANE speculative decoding support.
 // Consumers type-assert to a local interface with NewRuntime().
@@ -109,7 +150,13 @@ type speculativeRuntime struct {
 }
 
 func (r *speculativeRuntime) InstallLinearHook() func() {
-	return mlxgoane.InstallNNLinearHook(r.runtime)
+	mode := nn.LinearModeInference
+	restoreNN := mlxgoane.InstallNNLinearHookWithOptions(r.runtime, mlxgoane.LinearHookOptions{Mode: &mode})
+	restoreModel := mlxgoane.InstallModelLinearHookWithOptions(r.runtime, mlxgoane.LinearHookOptions{})
+	return func() {
+		restoreModel()
+		restoreNN()
+	}
 }
 
 func (r *speculativeRuntime) Telemetry() linearTelemetryProvider {

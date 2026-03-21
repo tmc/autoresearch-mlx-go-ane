@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/tmc/mlx-go/mlx"
+	"github.com/tmc/mlx-go/mlx/nn"
+	mlxraw "github.com/tmc/mlx-go/mlx/raw"
 	"github.com/tmc/mlx-go/mlxc"
 )
 
@@ -32,9 +35,14 @@ type LinearExecutor interface {
 
 // Runtime executes selected ops on ANE and falls back to mlx-go when needed.
 type Runtime struct {
-	Executor      LinearExecutor
-	AllowFallback bool
-	Router        *LinearRouter
+	Executor       LinearExecutor
+	AllowFallback  bool
+	Router         *LinearRouter
+	TrainingRouter *LinearRouter
+	vjpCache       *linearVJPCache // kept alive across mlx.Compile calls
+	vjpStateMu     sync.Mutex
+	vjpBackend     Backend
+	vjpFallback    string
 }
 
 // LinearResult contains a linear forward output and execution details.
@@ -53,6 +61,14 @@ func NewRuntime(executor LinearExecutor) *Runtime {
 //
 // x must be float32 [batch, inDim], w must be float32 [outDim, inDim].
 func (r *Runtime) Linear(ctx context.Context, x, w *mlx.Array) (*LinearResult, error) {
+	return r.linear(ctx, x, w, true)
+}
+
+func (r *Runtime) linearForward(ctx context.Context, x, w *mlx.Array) (*LinearResult, error) {
+	return r.linear(ctx, x, w, false)
+}
+
+func (r *Runtime) linear(ctx context.Context, x, w *mlx.Array, withVJP bool) (*LinearResult, error) {
 	batch, inDim, outDim, err := validateLinearInputs(x, w)
 	if err != nil {
 		return nil, err
@@ -79,9 +95,23 @@ func (r *Runtime) Linear(ctx context.Context, x, w *mlx.Array) (*LinearResult, e
 				}, nil
 			}
 		}
-		y, err := r.linearANE(ctx, x, w, batch, inDim, outDim)
+		var y *mlx.Array
+		if withVJP {
+			r.setVJPResult("", "")
+			y, err = r.linearANEWithVJP(ctx, x, w, batch, inDim, outDim)
+		} else {
+			y, err = r.linearANE(ctx, x, w, batch, inDim, outDim)
+		}
 		if err == nil {
-			return &LinearResult{Y: y, Backend: BackendANE}, nil
+			result := &LinearResult{Y: y, Backend: BackendANE}
+			if withVJP {
+				backend, fallback := r.vjpResult()
+				if backend != "" {
+					result.Backend = backend
+					result.FallbackReason = fallback
+				}
+			}
+			return result, nil
 		}
 		if r.AllowFallback {
 			y, fbErr := linearMLX(x, w)
@@ -102,6 +132,25 @@ func (r *Runtime) Linear(ctx context.Context, x, w *mlx.Array) (*LinearResult, e
 		return nil, err
 	}
 	return &LinearResult{Y: y, Backend: BackendMLX}, nil
+}
+
+func (r *Runtime) setVJPResult(backend Backend, fallback string) {
+	if r == nil {
+		return
+	}
+	r.vjpStateMu.Lock()
+	r.vjpBackend = backend
+	r.vjpFallback = fallback
+	r.vjpStateMu.Unlock()
+}
+
+func (r *Runtime) vjpResult() (Backend, string) {
+	if r == nil {
+		return "", ""
+	}
+	r.vjpStateMu.Lock()
+	defer r.vjpStateMu.Unlock()
+	return r.vjpBackend, r.vjpFallback
 }
 
 type linearModelProbe interface {
@@ -131,7 +180,8 @@ func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDeci
 		OutDim: routeOutDim,
 	}
 
-	if r == nil || r.Executor == nil || r.Router == nil {
+	router := r.activeRouter()
+	if r == nil || r.Executor == nil || router == nil {
 		return RouteDecision{UseANE: true, Reason: routeReasonEligible}, nil
 	}
 
@@ -142,7 +192,7 @@ func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDeci
 	if probe, ok := r.Executor.(linearRouteModelProbe); ok {
 		in.CacheKnown = true
 		in.CacheHit = probe.HasLinearRouteModel(routeBatch, routeInDim, routeOutDim)
-		return r.Router.DecideLinear(in), nil
+		return router.DecideLinear(in), nil
 	}
 	if probe, ok := r.Executor.(linearModelProbe); ok {
 		wData, err := mlx.ToSlice[float32](w)
@@ -153,7 +203,17 @@ func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDeci
 		in.CacheHit = probe.HasLinearModel(batch, inDim, outDim, hashFloat32Slice(wData))
 	}
 
-	return r.Router.DecideLinear(in), nil
+	return router.DecideLinear(in), nil
+}
+
+func (r *Runtime) activeRouter() *LinearRouter {
+	if r == nil {
+		return nil
+	}
+	if nn.CurrentLinearMode() == nn.LinearModeTraining && r.TrainingRouter != nil {
+		return r.TrainingRouter
+	}
+	return r.Router
 }
 
 func validateLinearInputs(x, w *mlx.Array) (batch, inDim, outDim int, err error) {
@@ -219,12 +279,10 @@ func contiguousFloat32View(a *mlx.Array) ([]float32, func(), error) {
 
 	view := a
 	owned := false
-	isContig, err := a.MLXArrayIsContiguous()
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("check contiguous: %w", err)
-	}
+	isContig := a.MLXArrayIsContiguous()
 	if !isContig {
-		view, err = mlx.Contiguous(a, false, nil)
+		var err error
+		view, err = mlxraw.Contiguous(a, false, nil)
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("make contiguous: %w", err)
 		}
@@ -254,13 +312,13 @@ func contiguousFloat32View(a *mlx.Array) ([]float32, func(), error) {
 }
 
 func linearMLX(x, w *mlx.Array) (*mlx.Array, error) {
-	wT, err := mlx.Transpose(w, nil)
+	wT, err := mlxraw.Transpose(w, nil)
 	if err != nil {
 		return nil, fmt.Errorf("transpose weights: %w", err)
 	}
 	defer wT.Free()
 
-	y, err := mlx.Matmul(x, wT, nil)
+	y, err := mlxraw.Matmul(x, wT, nil)
 	if err != nil {
 		return nil, fmt.Errorf("mlx matmul: %w", err)
 	}

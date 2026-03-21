@@ -10,8 +10,14 @@ type RuntimeOptions struct {
 	// Router overrides profile-based router selection when set.
 	Router *LinearRouter
 
+	// TrainingRouter overrides TrainingLinearRouteProfile when set.
+	TrainingRouter *LinearRouter
+
 	// LinearRouteProfile is used when Router is nil.
 	LinearRouteProfile LinearRouteProfile
+
+	// TrainingLinearRouteProfile is used when TrainingRouter is nil.
+	TrainingLinearRouteProfile LinearRouteProfile
 }
 
 // NewRuntimeWithOptions returns a runtime configured from opts.
@@ -25,10 +31,14 @@ func NewRuntimeWithOptions(opts RuntimeOptions) *Runtime {
 	}
 	if opts.Router != nil {
 		rt.Router = opts.Router
-		return rt
-	}
-	if opts.LinearRouteProfile != "" {
+	} else if opts.LinearRouteProfile != "" {
 		rt.Router = NewLinearRouter(LinearRouteConfigForProfile(opts.LinearRouteProfile))
+	}
+
+	if opts.TrainingRouter != nil {
+		rt.TrainingRouter = opts.TrainingRouter
+	} else if opts.TrainingLinearRouteProfile != "" {
+		rt.TrainingRouter = NewLinearRouter(TrainingLinearRouteConfigForProfile(opts.TrainingLinearRouteProfile))
 	}
 	return rt
 }
