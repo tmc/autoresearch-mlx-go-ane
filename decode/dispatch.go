@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go/mlx"
 	"github.com/tmc/mlx-go/mlx/fast"
+	mlxraw "github.com/tmc/mlx-go/mlx/raw"
 )
 
 // ---------------------------------------------------------------------------
@@ -44,7 +45,7 @@ type mlpForwarder interface {
 
 // rmsNorm applies RMS normalization on GPU using the fast kernel.
 func rmsNorm(x, weight *mlx.Array, eps float64) (*mlx.Array, error) {
-	return fast.RMSNorm(x, weight, float32(eps), nil)
+	return fast.RMSNorm(x, weight, float32(eps), nil), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ func prepareMetalConsumerOperand(arr *mlx.Array, dtype mlx.Dtype) (*mlx.Array, f
 	current := arr
 	var cleanup []func()
 	if dtype != 0 && current.Dtype() != dtype {
-		cast, err := mlx.Astype(current, dtype, nil)
+		cast, err := mlxraw.Astype(current, dtype, nil)
 		if err != nil {
 			for i := len(cleanup) - 1; i >= 0; i-- {
 				cleanup[i]()
@@ -87,7 +88,7 @@ func prepareMetalConsumerOperand(arr *mlx.Array, dtype mlx.Dtype) (*mlx.Array, f
 		current = cast
 		cleanup = append(cleanup, func() { cast.Free() })
 	}
-	rowContig, err := mlx.MLXArrayIsRowContiguous(current)
+	rowContig, err := mlxraw.MLXArrayIsRowContiguous(current)
 	if err != nil {
 		for i := len(cleanup) - 1; i >= 0; i-- {
 			cleanup[i]()
@@ -95,7 +96,7 @@ func prepareMetalConsumerOperand(arr *mlx.Array, dtype mlx.Dtype) (*mlx.Array, f
 		return nil, nil, fmt.Errorf("metal consumer operand contiguity: %w", err)
 	}
 	if !rowContig {
-		contig, err := mlx.Copy(current, nil)
+		contig, err := mlxraw.Copy(current, nil)
 		if err != nil {
 			for i := len(cleanup) - 1; i >= 0; i-- {
 				cleanup[i]()
@@ -168,18 +169,18 @@ func (p *Plane) inputNormWeight32(layerIdx int, weight *mlx.Array, dim int) (*ml
 	if weight == nil || weight.IsNil() {
 		return nil, fmt.Errorf("layer %d input norm weight is nil", layerIdx)
 	}
-	cast, err := mlx.Astype(weight, mlx.Float32, nil)
+	cast, err := mlxraw.Astype(weight, mlx.Float32, nil)
 	if err != nil {
 		return nil, fmt.Errorf("layer %d input norm cast: %w", layerIdx, err)
 	}
 	arr := cast
-	rowContig, err := mlx.MLXArrayIsRowContiguous(arr)
+	rowContig, err := mlxraw.MLXArrayIsRowContiguous(arr)
 	if err != nil {
 		arr.Free()
 		return nil, fmt.Errorf("layer %d input norm contiguity: %w", layerIdx, err)
 	}
 	if !rowContig {
-		copied, copyErr := mlx.Copy(arr, nil)
+		copied, copyErr := mlxraw.Copy(arr, nil)
 		arr.Free()
 		if copyErr != nil {
 			return nil, fmt.Errorf("layer %d input norm copy: %w", layerIdx, copyErr)
@@ -264,7 +265,7 @@ func moeStackOutputs(outputs []*mlx.Array) (*mlx.Array, error) {
 			}
 			return nil, fmt.Errorf("moe output shape=%v want 3D", shape)
 		}
-		arr, err := mlx.Reshape(out, []int{shape[0], shape[1], 1, 1, shape[2]}, nil)
+		arr, err := mlxraw.Reshape(out, []int{shape[0], shape[1], 1, 1, shape[2]}, nil)
 		if err != nil {
 			for _, prev := range expanded {
 				prev.Free()
@@ -276,7 +277,7 @@ func moeStackOutputs(outputs []*mlx.Array) (*mlx.Array, error) {
 	if len(expanded) == 1 {
 		return expanded[0], nil
 	}
-	stacked, err := mlx.ConcatenateAxis(expanded, 2, nil)
+	stacked, err := mlxraw.ConcatenateAxis(expanded, 2, nil)
 	for _, arr := range expanded {
 		arr.Free()
 	}
@@ -322,7 +323,7 @@ func (p *Plane) moeCombineOutputs(s *stage, sharedOut *mlx.Array, switchViews []
 	}
 	ab, ok := primary.bridge.(addBridge)
 	if !ok {
-		combined, addErr := mlx.Add(sharedOut, routed, nil)
+		combined, addErr := mlxraw.Add(sharedOut, routed, nil)
 		if addErr != nil {
 			return nil, false, fmt.Errorf("combine shared and routed outputs: %w", addErr)
 		}
@@ -364,14 +365,14 @@ func prepareInput(x *mlx.Array, dim, mapSeq int) (*mlx.Array, error) {
 	base := x
 	var toFree []*mlx.Array
 	if x.Dtype() != mlx.Float32 {
-		cast, err := mlx.Astype(x, mlx.Float32, nil)
+		cast, err := mlxraw.Astype(x, mlx.Float32, nil)
 		if err != nil {
 			return nil, fmt.Errorf("cast decode plane input: %w", err)
 		}
 		base = cast
 		toFree = append(toFree, cast)
 	}
-	packed, err := mlx.Reshape(base, []int{dim, 1}, nil)
+	packed, err := mlxraw.Reshape(base, []int{dim, 1}, nil)
 	if err != nil {
 		for _, arr := range toFree {
 			arr.Free()
@@ -382,7 +383,7 @@ func prepareInput(x *mlx.Array, dim, mapSeq int) (*mlx.Array, error) {
 		for _, arr := range toFree {
 			arr.Free()
 		}
-		rowContig, err := mlx.MLXArrayIsRowContiguous(packed)
+		rowContig, err := mlxraw.MLXArrayIsRowContiguous(packed)
 		if err != nil {
 			packed.Free()
 			return nil, fmt.Errorf("row contiguous decode plane input: %w", err)
@@ -393,7 +394,7 @@ func prepareInput(x *mlx.Array, dim, mapSeq int) (*mlx.Array, error) {
 		return makeContiguousCopy(packed)
 	}
 	if mapSeq > 1 {
-		zeros, zerr := mlx.Zeros([]int{dim, mapSeq - 1}, mlx.Float32, nil)
+		zeros, zerr := mlxraw.Zeros([]int{dim, mapSeq - 1}, mlx.Float32, nil)
 		if zerr != nil {
 			packed.Free()
 			for _, arr := range toFree {
@@ -401,7 +402,7 @@ func prepareInput(x *mlx.Array, dim, mapSeq int) (*mlx.Array, error) {
 			}
 			return nil, fmt.Errorf("pad decode plane input: %w", zerr)
 		}
-		padded, perr := mlx.ConcatenateAxis([]*mlx.Array{packed, zeros}, 1, nil)
+		padded, perr := mlxraw.ConcatenateAxis([]*mlx.Array{packed, zeros}, 1, nil)
 		zeros.Free()
 		packed.Free()
 		for _, arr := range toFree {
@@ -429,27 +430,27 @@ func prepareInputGraph(x, weight *mlx.Array, eps float64, dim, mapSeq int) (*mlx
 	}
 	base := normalized
 	if normalized.Dtype() != mlx.Float32 {
-		base, err = mlx.Astype(normalized, mlx.Float32, nil)
+		base, err = mlxraw.Astype(normalized, mlx.Float32, nil)
 		if err != nil {
 			return nil, fmt.Errorf("decode plane graph cast: %w", err)
 		}
 	}
-	packed, err := mlx.Reshape(base, []int{dim, 1}, nil)
+	packed, err := mlxraw.Reshape(base, []int{dim, 1}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("decode plane graph reshape: %w", err)
 	}
 	if mapSeq > 1 {
-		zeros, zerr := mlx.Zeros([]int{dim, mapSeq - 1}, mlx.Float32, nil)
+		zeros, zerr := mlxraw.Zeros([]int{dim, mapSeq - 1}, mlx.Float32, nil)
 		if zerr != nil {
 			return nil, fmt.Errorf("decode plane graph pad zeros: %w", zerr)
 		}
-		padded, perr := mlx.ConcatenateAxis([]*mlx.Array{packed, zeros}, 1, nil)
+		padded, perr := mlxraw.ConcatenateAxis([]*mlx.Array{packed, zeros}, 1, nil)
 		if perr != nil {
 			return nil, fmt.Errorf("decode plane graph concat: %w", perr)
 		}
 		packed = padded
 	}
-	contiguous, err := mlx.Contiguous(packed, false, nil)
+	contiguous, err := mlxraw.Contiguous(packed, false, nil)
 	if err != nil {
 		return nil, fmt.Errorf("decode plane graph contiguous: %w", err)
 	}
@@ -461,7 +462,7 @@ func makeContiguousCopy(arr *mlx.Array) (*mlx.Array, error) {
 	if arr == nil || arr.IsNil() {
 		return nil, fmt.Errorf("decode plane input is nil")
 	}
-	contiguous, err := mlx.Contiguous(arr, false, nil)
+	contiguous, err := mlxraw.Contiguous(arr, false, nil)
 	arr.Free()
 	if err != nil {
 		return nil, fmt.Errorf("contiguous decode plane input: %w", err)
@@ -477,14 +478,14 @@ func prepareDirectBlockCopyInput(arr *mlx.Array) (*mlx.Array, func(), error) {
 	copySrc := arr
 	var owned []*mlx.Array
 	if arr.Dtype() != mlx.Float32 {
-		cast, err := mlx.Astype(arr, mlx.Float32, nil)
+		cast, err := mlxraw.Astype(arr, mlx.Float32, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("direct block astype float32: %w", err)
 		}
 		copySrc = cast
 		owned = append(owned, cast)
 	}
-	rowContig, err := mlx.MLXArrayIsRowContiguous(copySrc)
+	rowContig, err := mlxraw.MLXArrayIsRowContiguous(copySrc)
 	if err != nil {
 		for _, ownedArr := range owned {
 			ownedArr.Free()
@@ -492,7 +493,7 @@ func prepareDirectBlockCopyInput(arr *mlx.Array) (*mlx.Array, func(), error) {
 		return nil, nil, fmt.Errorf("direct block row contiguous: %w", err)
 	}
 	if !rowContig {
-		contig, err := mlx.Contiguous(copySrc, false, nil)
+		contig, err := mlxraw.Contiguous(copySrc, false, nil)
 		if err != nil {
 			for _, ownedArr := range owned {
 				ownedArr.Free()
@@ -795,7 +796,7 @@ func (p *Plane) denseOutputFromInputs(s *stage, x, attnOut, weight *mlx.Array, e
 		return nil, nil, nil, true, err
 	}
 	aneCh := run.start(context.Background())
-	residual, err := mlx.Add(x, attnOut, nil)
+	residual, err := mlxraw.Add(x, attnOut, nil)
 	if err != nil {
 		run.abort()
 		return nil, nil, nil, true, fmt.Errorf("attention residual: %w", err)
@@ -1091,11 +1092,11 @@ func directBlockStateFromCache(keys, values *mlx.Array, stateHeads, cacheHeads, 
 	if seqLen > maxSeqLen {
 		origKeys, origValues := keys, values
 		var err error
-		keys, err = mlx.Slice(keys, []int{0, 0, seqLen - maxSeqLen, 0}, []int{1, cacheHeads, seqLen, headDim}, []int{1, 1, 1, 1}, nil)
+		keys, err = mlxraw.Slice(keys, []int{0, 0, seqLen - maxSeqLen, 0}, []int{1, cacheHeads, seqLen, headDim}, []int{1, 1, 1, 1}, nil)
 		if err != nil {
 			return nil, fmt.Errorf("slice direct block K cache: %w", err)
 		}
-		values, err = mlx.Slice(values, []int{0, 0, seqLen - maxSeqLen, 0}, []int{1, cacheHeads, seqLen, headDim}, []int{1, 1, 1, 1}, nil)
+		values, err = mlxraw.Slice(values, []int{0, 0, seqLen - maxSeqLen, 0}, []int{1, cacheHeads, seqLen, headDim}, []int{1, 1, 1, 1}, nil)
 		if err != nil {
 			keys.Free()
 			return nil, fmt.Errorf("slice direct block V cache: %w", err)
@@ -1218,12 +1219,12 @@ func (p *Plane) moeOutput(layerIdx int, normalized *mlx.Array) (*mlx.Array, []ou
 		releaseOutputViews(views)
 		return nil, nil, fmt.Errorf("shared expert gate: %w", err)
 	}
-	sharedGate, err = mlx.Sigmoid(sharedGate, nil)
+	sharedGate, err = mlxraw.Sigmoid(sharedGate, nil)
 	if err != nil {
 		releaseOutputViews(views)
 		return nil, nil, fmt.Errorf("sigmoid shared expert gate: %w", err)
 	}
-	sharedOut, err := mlx.Multiply(sharedGate, views[0].arr, nil)
+	sharedOut, err := mlxraw.Multiply(sharedGate, views[0].arr, nil)
 	if err != nil {
 		releaseOutputViews(views)
 		return nil, nil, fmt.Errorf("gate shared expert output: %w", err)
@@ -1236,17 +1237,17 @@ func (p *Plane) moeOutput(layerIdx int, normalized *mlx.Array) (*mlx.Array, []ou
 	if !handled {
 		combined = sharedOut
 		for i := 0; i < len(expertIDs); i++ {
-			score, sliceErr := mlx.Slice(scores, []int{0, 0, i}, []int{1, 1, i + 1}, []int{1, 1, 1}, nil)
+			score, sliceErr := mlxraw.Slice(scores, []int{0, 0, i}, []int{1, 1, i + 1}, []int{1, 1, 1}, nil)
 			if sliceErr != nil {
 				releaseOutputViews(views)
 				return nil, nil, fmt.Errorf("slice expert score %d: %w", i, sliceErr)
 			}
-			weighted, weightErr := mlx.Multiply(views[i+1].arr, score, nil)
+			weighted, weightErr := mlxraw.Multiply(views[i+1].arr, score, nil)
 			if weightErr != nil {
 				releaseOutputViews(views)
 				return nil, nil, fmt.Errorf("weight expert output %d: %w", i, weightErr)
 			}
-			next, addErr := mlx.Add(combined, weighted, nil)
+			next, addErr := mlxraw.Add(combined, weighted, nil)
 			if addErr != nil {
 				releaseOutputViews(views)
 				return nil, nil, fmt.Errorf("accumulate expert output %d: %w", i, addErr)
@@ -1302,7 +1303,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 
 	// If ANE is disabled or gpu_fallback mode is active, fall back to GPU-only path.
 	if p.isDisabled() || p.gpuFallback {
-		h, err := mlx.Add(x, attnOut, nil)
+		h, err := mlxraw.Add(x, attnOut, nil)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
 		}
@@ -1315,7 +1316,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 		if fallbackErr != nil {
 			return nil, nil, nil, fallbackErr
 		}
-		out, addErr := mlx.Add(h, mlpOut, nil)
+		out, addErr := mlxraw.Add(h, mlpOut, nil)
 		if addErr != nil {
 			return nil, nil, nil, addErr
 		}
@@ -1373,7 +1374,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 				goto postFFN
 			} else {
 				// Try norm-only path.
-				h, err = mlx.Add(x, attnOut, nil)
+				h, err = mlxraw.Add(x, attnOut, nil)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
 				}
@@ -1394,7 +1395,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 		}
 	} else {
 		// MoE path.
-		h, err = mlx.Add(x, attnOut, nil)
+		h, err = mlxraw.Add(x, attnOut, nil)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
 		}
@@ -1409,7 +1410,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 	// Error fallback: disable ANE and run MLP on GPU.
 	if err != nil {
 		if h == nil || h.IsNil() {
-			h, err = mlx.Add(x, attnOut, nil)
+			h, err = mlxraw.Add(x, attnOut, nil)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
 			}
@@ -1426,7 +1427,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 		if fallbackErr != nil {
 			return nil, nil, nil, fallbackErr
 		}
-		out, addErr := mlx.Add(h, mlpOut, nil)
+		out, addErr := mlxraw.Add(h, mlpOut, nil)
 		if addErr != nil {
 			return nil, nil, nil, addErr
 		}
@@ -1436,7 +1437,7 @@ func (p *Plane) layerForward(layerIdx int, x, preparedNorm *mlx.Array, mask any,
 postFFN:
 	// Ensure residual is computed.
 	if h == nil || h.IsNil() {
-		h, err = mlx.Add(x, attnOut, nil)
+		h, err = mlxraw.Add(x, attnOut, nil)
 		if err != nil {
 			releaseOutputViews(views)
 			return nil, nil, nil, fmt.Errorf("attention residual: %w", err)
@@ -1458,7 +1459,7 @@ postFFN:
 	}
 	// Plain GPU residual add.
 	if h.Dtype() != mlpOut.Dtype() {
-		cast, castErr := mlx.Astype(h, mlpOut.Dtype(), nil)
+		cast, castErr := mlxraw.Astype(h, mlpOut.Dtype(), nil)
 		if castErr != nil {
 			releaseOutputViews(views)
 			return nil, nil, nil, fmt.Errorf("cast residual: %w", castErr)
@@ -1466,7 +1467,7 @@ postFFN:
 		h.Free()
 		h = cast
 	}
-	out, err := mlx.Add(h, mlpOut, nil)
+	out, err := mlxraw.Add(h, mlpOut, nil)
 	if err != nil {
 		releaseOutputViews(views)
 		return nil, nil, nil, err
@@ -1516,7 +1517,7 @@ func (p *Plane) forwardFromEmbeddingsWithHook(embeddings *mlx.Array, cache kvcac
 			normDtype := normWeight.Dtype()
 			if h.Dtype() != normDtype {
 				var err error
-				h, err = mlx.Astype(h, normDtype, nil)
+				h, err = mlxraw.Astype(h, normDtype, nil)
 				if err != nil {
 					return nil, nil, fmt.Errorf("cast embeddings to norm dtype: %w", err)
 				}
@@ -1584,11 +1585,11 @@ func (p *Plane) forwardFromEmbeddingsWithHook(embeddings *mlx.Array, cache kvcac
 		lmHeadWeight = embedWeight
 	}
 	// out [1, 1, dim] @ lmHeadWeight.T [dim, vocab] → [1, 1, vocab]
-	lmT, err := mlx.Transpose(lmHeadWeight, nil)
+	lmT, err := mlxraw.Transpose(lmHeadWeight, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("lm head transpose: %w", err)
 	}
-	logits, err := mlx.Matmul(out, lmT, nil)
+	logits, err := mlxraw.Matmul(out, lmT, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("lm head matmul: %w", err)
 	}
@@ -1599,7 +1600,7 @@ func (p *Plane) forwardFromEmbeddingsWithHook(embeddings *mlx.Array, cache kvcac
 		if err := mlx.Eval(logits); err != nil {
 			return nil, nil, err
 		}
-		if err := mlx.Synchronize(nil); err != nil {
+		if err := mlxraw.Synchronize(nil); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -1619,12 +1620,12 @@ func (p *Plane) ForwardDecode(inputs *mlx.Array, cache kvcache.Cache) (*mlx.Arra
 	// Always cast to int32 (argmax sampling produces uint32).
 	// Use unconditional cast — Astype is a no-op for matching dtypes,
 	// and during JIT tracing, Dtype() on tracers may not be reliable.
-	normalized, err := mlx.Astype(inputs, mlx.Int32, nil)
+	normalized, err := mlxraw.Astype(inputs, mlx.Int32, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cast to int32: %w", err)
 	}
 	// Normalize to 2D [1, seq_len].
-	normalized, err = mlx.Reshape(normalized, []int{1, -1}, nil)
+	normalized, err = mlxraw.Reshape(normalized, []int{1, -1}, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reshape input: %w", err)
 	}
@@ -1646,7 +1647,7 @@ func (p *Plane) ForwardDecodeWithHook(inputs *mlx.Array, cache kvcache.Cache, ho
 	if inputs.Ndim() == 1 {
 		shape := inputs.Shape()
 		var err error
-		normalized, err = mlx.Reshape(inputs, []int{1, shape[0]}, nil)
+		normalized, err = mlxraw.Reshape(inputs, []int{1, shape[0]}, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("reshape 1d input: %w", err)
 		}

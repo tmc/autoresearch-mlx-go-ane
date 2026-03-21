@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go-lm/mlxlm/kvcache"
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
+	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go/mlx"
 )
 
@@ -33,7 +33,7 @@ type Plane struct {
 	weightProv    layerWeightProvider
 	headProv      headProvider
 	embed         embedder
-	moeProv       moeLayerProvider   // nil if model has no MoE layers
+	moeProv       moeLayerProvider    // nil if model has no MoE layers
 	linearProv    linearLayerProvider // nil if model has no linear attention
 
 	mu          sync.RWMutex
@@ -190,17 +190,17 @@ func Wrap(model models.LanguageModel, opts Options) (*Plane, error) {
 	gpuFallback := opts.Mode == "gpu_fallback"
 
 	plane := &Plane{
-		model:         model,
-		modelPath:     opts.ModelPath,
-		warn:          opts.Warn,
-		exp:           experimentConfigFromEnv(),
-		attnForwarder: attnFwd,
-		weightProv:    wp,
-		headProv:      hp,
-		embed:         emb,
-		moeProv:       moeProv,
-		linearProv:    linearProv,
-		stats:         Stats{Enabled: true},
+		model:           model,
+		modelPath:       opts.ModelPath,
+		warn:            opts.Warn,
+		exp:             experimentConfigFromEnv(),
+		attnForwarder:   attnFwd,
+		weightProv:      wp,
+		headProv:        hp,
+		embed:           emb,
+		moeProv:         moeProv,
+		linearProv:      linearProv,
+		stats:           Stats{Enabled: true},
 		inputNormF32:    make(map[int]*mlx.Array),
 		denseStages:     make(map[int]*stage),
 		denseErrs:       make(map[int]error),
@@ -746,7 +746,7 @@ func (p *Plane) prewarm() error {
 func (p *Plane) Forward(inputs *mlx.Array, cache kvcache.Cache) (*mlx.Array, kvcache.Cache, error) {
 	// When ANE is disabled (not gpu_fallback), delegate to the base model.
 	if p.isDisabled() && !p.gpuFallback {
-		return p.model.Forward(inputs, cache)
+		return models.Forward(nil, p.model, inputs, cache)
 	}
 	// Intercept single-token decode steps and route through the decode plane.
 	if inputs != nil && !inputs.IsNil() {
@@ -761,7 +761,7 @@ func (p *Plane) Forward(inputs *mlx.Array, cache kvcache.Cache) (*mlx.Array, kvc
 			return p.ForwardDecode(inputs, cache)
 		}
 	}
-	return p.model.Forward(inputs, cache)
+	return models.Forward(nil, p.model, inputs, cache)
 }
 
 func (p *Plane) Config() *models.ModelConfig {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/tmc/mlx-go-lm/offload"
 	"github.com/tmc/mlx-go/mlx"
+	mlxraw "github.com/tmc/mlx-go/mlx/raw"
 )
 
 // ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ func (s *stage) acquireSlot() (*stageSlot, uint64, bool, error) {
 			return slot, lease, false, nil
 		}
 		s.poolMu.Unlock()
-		if err := mlx.Synchronize(nil); err != nil {
+		if err := mlxraw.Synchronize(nil); err != nil {
 			return nil, 0, true, fmt.Errorf("%s: synchronize output pool: %w", s.name, err)
 		}
 		if s.onOutputPoolStall != nil {
@@ -173,18 +174,18 @@ func (s *stage) directNormWeight(weight *mlx.Array) (*mlx.Array, error) {
 	if weight == nil || weight.IsNil() {
 		return nil, fmt.Errorf("%s: norm weight is nil", s.name)
 	}
-	cast, err := mlx.Astype(weight, mlx.Float32, nil)
+	cast, err := mlxraw.Astype(weight, mlx.Float32, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: cast norm weight: %w", s.name, err)
 	}
 	arr := cast
-	rowContig, err := mlx.MLXArrayIsRowContiguous(arr)
+	rowContig, err := mlxraw.MLXArrayIsRowContiguous(arr)
 	if err != nil {
 		arr.Free()
 		return nil, fmt.Errorf("%s: norm weight contiguity: %w", s.name, err)
 	}
 	if !rowContig {
-		copied, copyErr := mlx.Copy(arr, nil)
+		copied, copyErr := mlxraw.Copy(arr, nil)
 		arr.Free()
 		if copyErr != nil {
 			return nil, fmt.Errorf("%s: copy norm weight: %w", s.name, copyErr)
@@ -269,7 +270,7 @@ func (slot *stageSlot) outputBuffer(dim int, dtype mlx.Dtype) (*mlx.Array, error
 		if slot.outputF32 != nil && !slot.outputF32.IsNil() {
 			return slot.outputF32, nil
 		}
-		arr, err := mlx.Zeros(shape, mlx.Float32, nil)
+		arr, err := mlxraw.Zeros(shape, mlx.Float32, nil)
 		if err != nil {
 			return nil, fmt.Errorf("%s: allocate float32 output buffer: %w", slot.name, err)
 		}
@@ -283,7 +284,7 @@ func (slot *stageSlot) outputBuffer(dim int, dtype mlx.Dtype) (*mlx.Array, error
 		slot.outputNative.Free()
 		slot.outputNative = nil
 	}
-	arr, err := mlx.Zeros(shape, dtype, nil)
+	arr, err := mlxraw.Zeros(shape, dtype, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: allocate native output buffer: %w", slot.name, err)
 	}
@@ -298,7 +299,7 @@ func (slot *stageSlot) nextNormBuffer(dim int) (*mlx.Array, error) {
 	if slot.nextNormF32 != nil && !slot.nextNormF32.IsNil() {
 		return slot.nextNormF32, nil
 	}
-	arr, err := mlx.Zeros([]int{1, 1, dim}, mlx.Float32, nil)
+	arr, err := mlxraw.Zeros([]int{1, 1, dim}, mlx.Float32, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: allocate next-norm buffer: %w", slot.name, err)
 	}
@@ -650,7 +651,7 @@ func (r *preparedRun) outputHiddenView(dtype mlx.Dtype) (*outputView, error) {
 				}
 			}
 		} else {
-			out, castErr := mlx.Astype(src, dtype, nil)
+			out, castErr := mlxraw.Astype(src, dtype, nil)
 			if castErr == nil {
 				r.slot.mu.Unlock()
 				return &outputView{
@@ -669,7 +670,7 @@ func (r *preparedRun) outputHiddenView(dtype mlx.Dtype) (*outputView, error) {
 	out := src
 	toFree := []*mlx.Array(nil)
 	if dtype != mlx.Float32 {
-		out, err = mlx.Astype(out, dtype, nil)
+		out, err = mlxraw.Astype(out, dtype, nil)
 		if err != nil {
 			r.slot.mu.Unlock()
 			r.stage.releaseSlot(r.slot, r.leaseSeq)
@@ -677,7 +678,7 @@ func (r *preparedRun) outputHiddenView(dtype mlx.Dtype) (*outputView, error) {
 		}
 		toFree = append(toFree, out)
 	}
-	owned, err := mlx.Copy(out, nil)
+	owned, err := mlxraw.Copy(out, nil)
 	for i := len(toFree) - 1; i >= 0; i-- {
 		toFree[i].Free()
 	}
@@ -736,7 +737,7 @@ func (b *directBlock) acquireSlot() (*directSlot, uint64, bool, error) {
 			return slot, lease, false, nil
 		}
 		b.poolMu.Unlock()
-		if err := mlx.Synchronize(nil); err != nil {
+		if err := mlxraw.Synchronize(nil); err != nil {
 			return nil, 0, true, fmt.Errorf("%s: synchronize output pool: %w", b.name, err)
 		}
 		if b.onOutputPoolStall != nil {
@@ -878,7 +879,7 @@ func (slot *directSlot) outputBuffer(hiddenDim int, dtype mlx.Dtype) (*mlx.Array
 		if slot.outputF32 != nil && !slot.outputF32.IsNil() {
 			return slot.outputF32, nil
 		}
-		arr, err := mlx.Zeros(shape, mlx.Float32, nil)
+		arr, err := mlxraw.Zeros(shape, mlx.Float32, nil)
 		if err != nil {
 			return nil, fmt.Errorf("%s: allocate float32 output buffer: %w", slot.name, err)
 		}
@@ -892,7 +893,7 @@ func (slot *directSlot) outputBuffer(hiddenDim int, dtype mlx.Dtype) (*mlx.Array
 		slot.outputNative.Free()
 		slot.outputNative = nil
 	}
-	arr, err := mlx.Zeros(shape, dtype, nil)
+	arr, err := mlxraw.Zeros(shape, dtype, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: allocate native output buffer: %w", slot.name, err)
 	}
@@ -914,11 +915,11 @@ func (slot *directSlot) zeroRows(name string, kvHeads, headDim int, dtype mlx.Dt
 		dtype = mlx.Float16
 	}
 	shape := []int{1, kvHeads, 1, headDim}
-	zeroK, err := mlx.Zeros(shape, dtype, nil)
+	zeroK, err := mlxraw.Zeros(shape, dtype, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: zero K row: %w", name, err)
 	}
-	zeroV, err := mlx.Zeros(shape, dtype, nil)
+	zeroV, err := mlxraw.Zeros(shape, dtype, nil)
 	if err != nil {
 		zeroK.Free()
 		return nil, nil, fmt.Errorf("%s: zero V row: %w", name, err)
@@ -1010,7 +1011,7 @@ func (b *directBlock) outputHiddenView(slot *directSlot, lease uint64, dtype mlx
 				}
 			}
 		} else {
-			out, castErr := mlx.Astype(src, dtype, nil)
+			out, castErr := mlxraw.Astype(src, dtype, nil)
 			if castErr == nil {
 				slot.mu.Unlock()
 				return &outputView{
@@ -1029,7 +1030,7 @@ func (b *directBlock) outputHiddenView(slot *directSlot, lease uint64, dtype mlx
 	out := src
 	toFree := []*mlx.Array(nil)
 	if dtype != mlx.Float32 {
-		out, err = mlx.Astype(out, dtype, nil)
+		out, err = mlxraw.Astype(out, dtype, nil)
 		if err != nil {
 			slot.mu.Unlock()
 			b.releaseSlot(slot, lease)
@@ -1037,7 +1038,7 @@ func (b *directBlock) outputHiddenView(slot *directSlot, lease uint64, dtype mlx
 		}
 		toFree = append(toFree, out)
 	}
-	owned, err := mlx.Copy(out, nil)
+	owned, err := mlxraw.Copy(out, nil)
 	for i := len(toFree) - 1; i >= 0; i-- {
 		toFree[i].Free()
 	}
@@ -1065,7 +1066,7 @@ func arrayToFloat32Slice(arr *mlx.Array) ([]float32, error) {
 	arr32 := arr
 	var cleanup func()
 	if arr.Dtype() != mlx.Float32 {
-		cast, err := mlx.Astype(arr, mlx.Float32, nil)
+		cast, err := mlxraw.Astype(arr, mlx.Float32, nil)
 		if err != nil {
 			return nil, fmt.Errorf("cast to float32: %w", err)
 		}
@@ -1090,7 +1091,7 @@ func canUseDirectInput(x *mlx.Array, dim, mapSeq int) bool {
 	if len(shape) != 3 || shape[0] != 1 || shape[1] != 1 || shape[2] != dim {
 		return false
 	}
-	ok, err := mlx.MLXArrayIsRowContiguous(x)
+	ok, err := mlxraw.MLXArrayIsRowContiguous(x)
 	return err == nil && ok
 }
 
@@ -1112,7 +1113,7 @@ func canUseDirectNormWeight(weight *mlx.Array, dim int) bool {
 	if total != dim {
 		return false
 	}
-	ok, err := mlx.MLXArrayIsRowContiguous(weight)
+	ok, err := mlxraw.MLXArrayIsRowContiguous(weight)
 	return err == nil && ok
 }
 
@@ -1136,10 +1137,10 @@ func canUseDirectResidualInputs(x, y *mlx.Array, dim int) bool {
 	if yShape[0] != 1 || yShape[1] != 1 || yShape[2] != dim {
 		return false
 	}
-	xOK, xErr := mlx.MLXArrayIsRowContiguous(x)
+	xOK, xErr := mlxraw.MLXArrayIsRowContiguous(x)
 	if xErr != nil || !xOK {
 		return false
 	}
-	yOK, yErr := mlx.MLXArrayIsRowContiguous(y)
+	yOK, yErr := mlxraw.MLXArrayIsRowContiguous(y)
 	return yErr == nil && yOK
 }
