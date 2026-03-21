@@ -143,8 +143,8 @@ func TestInstallNNLinearHookWithStatsRecordsANEAndFallback(t *testing.T) {
 
 func TestLinearHookStatsResetAndFraction(t *testing.T) {
 	stats := NewLinearHookStats()
-	stats.record(nil, &LinearResult{Backend: BackendANE})
-	stats.record(nil, &LinearResult{Backend: BackendMLX, FallbackReason: "router: small"})
+	stats.record(nil, &LinearResult{Backend: BackendANE}, 0)
+	stats.record(nil, &LinearResult{Backend: BackendMLX, FallbackReason: "router: small"}, 0)
 
 	got := stats.Snapshot()
 	if got.TotalCalls != 2 || got.ANECalls != 1 || got.MLXCalls != 1 {

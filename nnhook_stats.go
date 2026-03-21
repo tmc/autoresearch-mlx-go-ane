@@ -23,6 +23,8 @@ type LinearHookStats struct {
 	compileTotal    time.Duration
 	loadTotal       time.Duration
 	evaluateTotal   time.Duration
+	aneWallTotal    time.Duration
+	mlxWallTotal    time.Duration
 	fallbackReasons map[string]uint64
 }
 
@@ -40,6 +42,8 @@ type LinearHookStatsSnapshot struct {
 	CompileTotal    time.Duration
 	LoadTotal       time.Duration
 	EvaluateTotal   time.Duration
+	ANEWallTotal    time.Duration
+	MLXWallTotal    time.Duration
 	FallbackReasons map[string]uint64
 }
 
@@ -67,6 +71,8 @@ func (s *LinearHookStats) Reset() {
 	s.compileTotal = 0
 	s.loadTotal = 0
 	s.evaluateTotal = 0
+	s.aneWallTotal = 0
+	s.mlxWallTotal = 0
 	clear(s.fallbackReasons)
 }
 
@@ -95,6 +101,8 @@ func (s *LinearHookStats) Snapshot() LinearHookStatsSnapshot {
 		CompileTotal:    s.compileTotal,
 		LoadTotal:       s.loadTotal,
 		EvaluateTotal:   s.evaluateTotal,
+		ANEWallTotal:    s.aneWallTotal,
+		MLXWallTotal:    s.mlxWallTotal,
 		FallbackReasons: reasons,
 	}
 }
@@ -129,7 +137,37 @@ func (s LinearHookStatsSnapshot) FormatFallbackReasons() string {
 	return strings.Join(parts, ",")
 }
 
-func (s *LinearHookStats) record(rt *Runtime, res *LinearResult) {
+func (s LinearHookStatsSnapshot) ANEObservedOverhead() time.Duration {
+	known := s.BuildTotal + s.CompileTotal + s.LoadTotal + s.EvaluateTotal
+	if s.ANEWallTotal <= known {
+		return 0
+	}
+	return s.ANEWallTotal - known
+}
+
+func (s LinearHookStatsSnapshot) AvgANEWall() time.Duration {
+	if s.ANECalls == 0 {
+		return 0
+	}
+	return time.Duration(int64(s.ANEWallTotal) / int64(s.ANECalls))
+}
+
+func (s LinearHookStatsSnapshot) AvgMLXWall() time.Duration {
+	if s.MLXCalls == 0 {
+		return 0
+	}
+	return time.Duration(int64(s.MLXWallTotal) / int64(s.MLXCalls))
+}
+
+func (s LinearHookStatsSnapshot) AvgANEOverhead() time.Duration {
+	if s.ANECalls == 0 {
+		return 0
+	}
+	overhead := s.ANEObservedOverhead()
+	return time.Duration(int64(overhead) / int64(s.ANECalls))
+}
+
+func (s *LinearHookStats) record(rt *Runtime, res *LinearResult, wall time.Duration) {
 	if s == nil || res == nil {
 		return
 	}
@@ -140,6 +178,7 @@ func (s *LinearHookStats) record(rt *Runtime, res *LinearResult) {
 	switch res.Backend {
 	case BackendANE:
 		s.aneCalls++
+		s.aneWallTotal += wall
 		if provider, ok := linearTelemetryProvider(rt); ok {
 			t := provider.LastLinearTelemetry()
 			s.cacheKnownCalls++
@@ -155,6 +194,7 @@ func (s *LinearHookStats) record(rt *Runtime, res *LinearResult) {
 		}
 	case BackendMLX:
 		s.mlxCalls++
+		s.mlxWallTotal += wall
 		reason := strings.TrimSpace(res.FallbackReason)
 		if strings.HasPrefix(reason, "router: ") {
 			s.routerFallbacks++

@@ -5,6 +5,7 @@ package register
 import (
 	"context"
 	"fmt"
+	"time"
 
 	mlxgoane "github.com/tmc/mlx-go-ane"
 	_ "github.com/tmc/mlx-go-ane/anedraftimpl"
@@ -83,13 +84,16 @@ func (r *trainingRouting) Report() {
 	}
 	s := r.stats.Snapshot()
 	fmt.Printf(
-		"ANE linear hook summary: total=%d ane=%d mlx=%d ane_frac=%.2f cache_hits=%d cache_misses=%d fallback_reasons=%s\n",
+		"ANE linear hook summary: total=%d ane=%d mlx=%d ane_frac=%.2f cache_hits=%d cache_misses=%d ane_avg_wall=%s ane_avg_overhead=%s mlx_avg_wall=%s fallback_reasons=%s\n",
 		s.TotalCalls,
 		s.ANECalls,
 		s.MLXCalls,
 		s.ANEFraction(),
 		s.CacheHits,
 		s.CacheMisses,
+		s.AvgANEWall().Round(time.Microsecond),
+		s.AvgANEOverhead().Round(time.Microsecond),
+		s.AvgMLXWall().Round(time.Microsecond),
 		s.FormatFallbackReasons(),
 	)
 	r.last = s
@@ -100,6 +104,7 @@ func (r *trainingRouting) ReportWindow(label string) {
 		return
 	}
 	s := r.stats.Snapshot()
+	window := diffLinearHookStatsSnapshot(s, r.last)
 	deltaTotal := s.TotalCalls - r.last.TotalCalls
 	deltaANE := s.ANECalls - r.last.ANECalls
 	deltaMLX := s.MLXCalls - r.last.MLXCalls
@@ -107,14 +112,33 @@ func (r *trainingRouting) ReportWindow(label string) {
 		return
 	}
 	fmt.Printf(
-		"ANE linear hook window[%s]: total=%d ane=%d mlx=%d ane_frac=%.2f\n",
+		"ANE linear hook window[%s]: total=%d ane=%d mlx=%d ane_frac=%.2f ane_avg_wall=%s ane_avg_overhead=%s mlx_avg_wall=%s\n",
 		label,
 		deltaTotal,
 		deltaANE,
 		deltaMLX,
 		float64(deltaANE)/float64(deltaTotal),
+		window.AvgANEWall().Round(time.Microsecond),
+		window.AvgANEOverhead().Round(time.Microsecond),
+		window.AvgMLXWall().Round(time.Microsecond),
 	)
 	r.last = s
+}
+
+func diffLinearHookStatsSnapshot(cur, prev mlxgoane.LinearHookStatsSnapshot) mlxgoane.LinearHookStatsSnapshot {
+	return mlxgoane.LinearHookStatsSnapshot{
+		TotalCalls:    cur.TotalCalls - prev.TotalCalls,
+		ANECalls:      cur.ANECalls - prev.ANECalls,
+		MLXCalls:      cur.MLXCalls - prev.MLXCalls,
+		CacheHits:     cur.CacheHits - prev.CacheHits,
+		CacheMisses:   cur.CacheMisses - prev.CacheMisses,
+		BuildTotal:    cur.BuildTotal - prev.BuildTotal,
+		CompileTotal:  cur.CompileTotal - prev.CompileTotal,
+		LoadTotal:     cur.LoadTotal - prev.LoadTotal,
+		EvaluateTotal: cur.EvaluateTotal - prev.EvaluateTotal,
+		ANEWallTotal:  cur.ANEWallTotal - prev.ANEWallTotal,
+		MLXWallTotal:  cur.MLXWallTotal - prev.MLXWallTotal,
+	}
 }
 
 // speculativeBackend registers ANE speculative decoding support.

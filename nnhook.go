@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tmc/mlx-go-lm/mlxlm/models"
 	"github.com/tmc/mlx-go/mlx"
@@ -248,13 +249,14 @@ func (s *linearHookSession) runContext(ctx context.Context, x, weight, bias *mlx
 		y   *mlx.Array
 		err error
 	)
-	if nn.CurrentLinearMode() == nn.LinearModeTraining {
+	if linearModeFromContext(ctx) == nn.LinearModeTraining {
 		y, err = s.trainingLinear(evalX, evalW)
 	} else {
 		var res *LinearResult
+		start := time.Now()
 		res, err = s.rt.Linear(ctx, evalX, evalW)
 		if err == nil && s.stats != nil {
-			s.stats.record(s.rt, res)
+			s.stats.record(s.rt, res, time.Since(start))
 		}
 		if err == nil {
 			y = res.Y
@@ -355,6 +357,7 @@ func (s *linearHookSession) initTrainingHandle() (*linearHookVJPHandle, error) {
 
 		gx := mlx.NewArrayFromMlxc(cx)
 		gw := mlx.NewArrayFromMlxc(cw)
+		start := time.Now()
 		res, err := s.rt.linearForward(context.Background(), gx, gw)
 		if err != nil {
 			y, fbErr := linearMLX(gx, gw)
@@ -368,7 +371,7 @@ func (s *linearHookSession) initTrainingHandle() (*linearHookVJPHandle, error) {
 			}
 		}
 		if s.stats != nil {
-			s.stats.record(s.rt, res)
+			s.stats.record(s.rt, res, time.Since(start))
 		}
 		*output = mlxc.NewVectorArrayValue(res.Y.MlxcArray())
 		return nil

@@ -76,7 +76,7 @@ func (r *Runtime) linear(ctx context.Context, x, w *mlx.Array, withVJP bool) (*L
 
 	if r != nil && r.Executor != nil {
 		if r.Router != nil {
-			decision, err := r.routeLinear(w, batch, inDim, outDim)
+			decision, err := r.routeLinear(ctx, w, batch, inDim, outDim)
 			if err != nil {
 				return nil, err
 			}
@@ -169,7 +169,7 @@ type linearRouteShapeProvider interface {
 	LinearRouteShape(batch, inDim, outDim int) (routeBatch, routeInDim, routeOutDim int)
 }
 
-func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDecision, error) {
+func (r *Runtime) routeLinear(ctx context.Context, w *mlx.Array, batch, inDim, outDim int) (RouteDecision, error) {
 	routeBatch, routeInDim, routeOutDim := batch, inDim, outDim
 	if provider, ok := r.Executor.(linearRouteShapeProvider); ok {
 		routeBatch, routeInDim, routeOutDim = provider.LinearRouteShape(batch, inDim, outDim)
@@ -180,7 +180,7 @@ func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDeci
 		OutDim: routeOutDim,
 	}
 
-	router := r.activeRouter()
+	router := r.activeRouter(ctx)
 	if r == nil || r.Executor == nil || router == nil {
 		return RouteDecision{UseANE: true, Reason: routeReasonEligible}, nil
 	}
@@ -206,14 +206,21 @@ func (r *Runtime) routeLinear(w *mlx.Array, batch, inDim, outDim int) (RouteDeci
 	return router.DecideLinear(in), nil
 }
 
-func (r *Runtime) activeRouter() *LinearRouter {
+func (r *Runtime) activeRouter(ctx context.Context) *LinearRouter {
 	if r == nil {
 		return nil
 	}
-	if nn.CurrentLinearMode() == nn.LinearModeTraining && r.TrainingRouter != nil {
+	if linearModeFromContext(ctx) == nn.LinearModeTraining && r.TrainingRouter != nil {
 		return r.TrainingRouter
 	}
 	return r.Router
+}
+
+func linearModeFromContext(ctx context.Context) nn.LinearMode {
+	if mode, ok := nn.LinearModeFromContext(ctx); ok {
+		return mode
+	}
+	return nn.CurrentLinearMode()
 }
 
 func validateLinearInputs(x, w *mlx.Array) (batch, inDim, outDim int, err error) {
